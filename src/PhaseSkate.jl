@@ -1,3 +1,15 @@
+"""
+    PhaseSkate
+
+Scalable, high-performance Bayesian inference in native Julia.
+Built for Enzyme LLVM autodifferentiation.
+
+# Core workflow
+1. Define a model with `@skate`
+2. Build with `make(data)` → `ModelLogDensity`
+3. Sample with `sample()`, `sample_mclmc()`, or `sample_adjusted_mclmc()`
+4. Inspect results via `Chains`: `mean()`, `ci()`, `min_ess()`
+"""
 module PhaseSkate
 
 using Enzyme

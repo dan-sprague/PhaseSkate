@@ -110,6 +110,7 @@ function multi_normal_cholesky_scaled_lpdf(x, μ, log_sigma_row, L_corr)
     return -T(0.5) * quad - log_det - T(0.5) * k * log(T(2π))
 end
 
+"""Log-density of Normal(μ, σ) evaluated at x. Pure arithmetic — Enzyme-safe."""
 function normal_lpdf(x, μ, σ)
     σ_safe = max(σ, eps(typeof(float(σ))))
     return -log(σ_safe) - 0.5 * log(2π) - 0.5 * abs2((x - μ) / σ_safe)

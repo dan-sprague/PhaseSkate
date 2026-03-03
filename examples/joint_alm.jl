@@ -1,6 +1,6 @@
 # Joint ALM Model — @for syntax demo 
 # Uses @for broadcast-to-loop unrolling for readable, zero-allocation regression blocks.
-using Pkg; Pkg.activate(@__DIR__)
+using Pkg; Pkg.activate(joinpath(@__DIR__, ".."))
 using PhaseSkate
 using Random
 using Statistics
@@ -238,14 +238,9 @@ d = JointALMData(
     mrc_times_flat=mrc_times_flat, mrc_patient_ids=mrc_patient_ids
 )
 
-m = make(d)
+m = make(d);
 println("\nJoint ALM Model — dim=$(m.dim)")
 
-q_test = randn(m.dim)
-lp = log_prob(m, q_test)
-println("Test log_prob = $(round(lp; sigdigits=4))")
-@assert isfinite(lp) "log_prob is not finite at test point"
-
-println("\nSampling 10000 draws (500 warmup)...")
-@time samples = sample(m, 2000; ϵ=0.1, max_depth=8, warmup=1000,chains=4);
-println("Done — $(length(samples)) draws\n")
+#@time samples = sample(m, 2000; ϵ=0.1, max_depth=8, warmup=1000,chains=4);
+@time ch = sample_adjusted_mclmc(m, 2000; warmup=1000, chains=4, seed=42);
+#println("Done — $(length(samples)) draws\n")

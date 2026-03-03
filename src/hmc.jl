@@ -520,6 +520,22 @@ function _run_chain(rng, model, num_samples, ϵ₀, max_depth, warmup, ∇!; cha
     return raw, n_divergent
 end
 
+"""
+    sample(model, num_samples; warmup=1000, chains=4, ϵ=0.1, max_depth=10, ad=:auto, seed=nothing, δ=0.8) → Chains
+
+Run NUTS (No-U-Turn Sampler) on a compiled model. Returns a `Chains` object.
+
+# Arguments
+- `model`: A `ModelLogDensity` from `make(data)`.
+- `num_samples`: Number of post-warmup draws per chain.
+- `warmup`: Number of warmup/adaptation steps per chain.
+- `chains`: Number of parallel chains.
+- `ϵ`: Initial step size (adapted during warmup).
+- `max_depth`: Maximum tree depth for NUTS.
+- `ad`: Autodiff mode — `:auto`, `:forward`, or `:reverse`.
+- `seed`: RNG seed for reproducibility.
+- `δ`: Target acceptance probability for step size adaptation.
+"""
 function sample(model, num_samples; ϵ = 0.1, max_depth = 10, warmup = 1000, ad = :auto, chains = 4, seed = nothing, δ = 0.8)
     ∇! = _make_grad(model; ad)
 

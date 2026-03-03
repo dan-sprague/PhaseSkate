@@ -691,6 +691,25 @@ _div(a, b) = :(div($a, $b))
 # @skate macro — CPU codegen
 # ═══════════════════════════════════════════════════════════════════════════════
 
+"""
+    @skate ModelName begin
+        @constants begin ... end
+        @params begin ... end
+        @logjoint begin ... end
+    end
+
+Define a Bayesian model. Generates:
+- `ModelNameData` struct for holding constants/data
+- `make(data::ModelNameData) → ModelLogDensity` to build the compiled model
+
+**Blocks:**
+- `@constants` — Declare data fields with types (e.g. `N::Int`, `X::Matrix{Float64}`)
+- `@params` — Declare parameters to sample. Scalars use `name::Float64`, constrained
+  params use `name = param(Float64; lower=0.0)`, vectors/matrices use
+  `name = param(Vector{Float64}, K)`. Supports `simplex=true`, `ordered=true`.
+- `@logjoint` — The log-joint density. Accumulate via `target += lpdf(...)`.
+  Use `@for begin ... end` for zero-allocation broadcast-to-loop unrolling.
+"""
 macro skate(model_name::Symbol, body::Expr)
     body.head == :block || error("@skate expects begin...end block")
     data_blk = params_blk = model_blk = nothing

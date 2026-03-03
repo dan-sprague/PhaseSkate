@@ -1,9 +1,25 @@
+"""
+    ModelLogDensity
+
+Compiled model holding the log-density function, parameter dimension,
+and a constraining function. Created by `make(data)`.
+
+Fields:
+- `dim::Int` — Number of unconstrained parameters.
+- `ℓ` — Log-density closure `q::Vector{Float64} → Float64`.
+- `constrain` — Maps unconstrained vector to named parameter tuple.
+"""
 struct ModelLogDensity{F, G}
     dim::Int
     ℓ::F
     constrain::G
 end
 
+"""
+    log_prob(model, q) → Float64
+
+Evaluate the log-density of `model` at unconstrained parameter vector `q`.
+"""
 log_prob(m::ModelLogDensity, q) = m.ℓ(q)
 
 ## Reverse mode — one forward+backward pass, O(1) in dim
