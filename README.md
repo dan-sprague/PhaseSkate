@@ -8,7 +8,7 @@ Built for [Enzyme](https://github.com/EnzymeAD/Enzyme.jl).
 
 ## Why PhaseSkate?
 
-I built this package to answer a question that has been bothing me: *given an efficient logjoint function and a gradient, how fast can Julia+Enzyme sample complex posteriors? Can I design a minimal PPL around this?* 
+I built this package to answer a question that has been bothing me: *What is the best way to generate very efficient logjoint functions in a way that will play nice with Enzyme AD?* 
 
 HMC is intensive, CPU-bound numerical computation of complex gradients — at its heart a physics simulation of a particle skating around phase space. This is Julia's home turf!!!!!!!
 
