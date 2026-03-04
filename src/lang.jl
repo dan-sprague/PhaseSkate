@@ -68,10 +68,17 @@ end
 function _rewrite_data_refs(ex, data_names::Set{Symbol}, param_names::Set{Symbol})
     ex isa Symbol && ex ∈ data_names && ex ∉ param_names && return :(data.$ex)
     ex isa Expr || return ex
-    # Don't rewrite the LHS of assignments
+    # Don't rewrite the LHS of simple assignments (bare symbol),
+    # but DO recurse into complex LHS (e.g., ref indexing) so that
+    # data dims like K in `name[k in 1:K]` get rewritten.
     if ex.head == :(=)
-        return Expr(:(=), ex.args[1],
-                    _rewrite_data_refs(ex.args[2], data_names, param_names))
+        lhs = ex.args[1]
+        rhs = _rewrite_data_refs(ex.args[2], data_names, param_names)
+        if lhs isa Symbol
+            return Expr(:(=), lhs, rhs)
+        else
+            return Expr(:(=), _rewrite_data_refs(lhs, data_names, param_names), rhs)
+        end
     end
     return Expr(ex.head, [_rewrite_data_refs(a, data_names, param_names) for a in ex.args]...)
 end
@@ -527,7 +534,7 @@ function _expand_for_assign(stmt, env)
 
     return quote
         $lhs = Vector{Float64}(undef, $len_expr)
-        for $idx in 1:$len_expr
+        @inbounds for $idx in 1:$len_expr
             $(preamble...)
             $lhs[$idx] = $body
         end
@@ -574,7 +581,7 @@ function _expand_for_block(block, env)
 
     return quote
         $(allocs...)
-        for $idx in 1:$len_expr
+        @inbounds for $idx in 1:$len_expr
             $(loop_body...)
         end
     end
@@ -611,7 +618,46 @@ function _is_target_sum(ex, env)
     return inner_shape.kind == _shape_vector
 end
 
-"""Walk statement list, expand @for annotations, maintain shape env."""
+"""
+    @let name[k in 1:K] = expr
+
+Precompute a vector of cached values in the @logjoint body.
+Expands to `name = Vector{Float64}(undef, K); @inbounds for k in 1:K; name[k] = expr; end`.
+The resulting `name` can be indexed as `name[k]` in subsequent statements.
+"""
+function _expand_let(body, env)
+    # body is:  :(name[k in lo:hi] = rhs)
+    lhs = body.args[1]   # :(name[k in lo:hi])
+    rhs = body.args[2]   # the expression
+
+    name = lhs.args[1]
+    in_expr = lhs.args[2]  # :(call(in, k, lo:hi))
+    in_expr isa Expr && in_expr.head == :call && in_expr.args[1] == :in ||
+        error("@let: expected name[iter in range] = expr, got: $body")
+
+    iter_var = in_expr.args[2]
+    range_expr = in_expr.args[3]
+
+    # extract length from range
+    if range_expr isa Expr && range_expr.head == :call && range_expr.args[1] == :(:)
+        lo = range_expr.args[2]
+        hi = range_expr.args[3]
+    else
+        error("@let: expected explicit lo:hi range, got: $range_expr")
+    end
+
+    len_expr = lo == 1 ? hi : :($hi - $lo + 1)
+    env[name] = _vector_shape(len_expr)
+
+    return quote
+        $name = Vector{Float64}(undef, $len_expr)
+        @inbounds for $iter_var in $lo:$hi
+            $name[$iter_var] = $rhs
+        end
+    end
+end
+
+"""Walk statement list, expand @for and @let annotations, maintain shape env."""
 function _expand_for_annotations(stmts, param_specs, data_fields)
     env = _build_shape_env(param_specs, data_fields)
     output = Expr[]
@@ -633,6 +679,15 @@ function _expand_for_annotations(stmts, param_specs, data_fields)
             else
                 push!(output, body)
             end
+
+        elseif s.head == :macrocall && !isempty(s.args) && s.args[1] == Symbol("@let")
+            body_args = filter(a -> !(a isa LineNumberNode), s.args[2:end])
+            isempty(body_args) && (push!(output, s); continue)
+            body = body_args[1]
+            body isa Expr && body.head == :(=) ||
+                error("@let: expected @let name[k in 1:K] = expr")
+            push!(output, _expand_let(body, env))
+
         else
             push!(output, s)
             if s.head == :(=) && s.args[1] isa Symbol

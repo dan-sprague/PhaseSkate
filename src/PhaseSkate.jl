@@ -66,6 +66,7 @@ export @skate, make, sample, log_prob, ModelLogDensity,
        logistic_lpdf,
        beta_lpdf,
        lkj_corr_cholesky_lpdf,
+       correlated_topic_lpdf,
        diag_pre_multiply
 
 end # module PhaseSkate

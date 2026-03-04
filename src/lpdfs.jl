@@ -327,3 +327,34 @@ function logistic_lpdf(x, μ, s)
     z = (x - μ) / s_safe
     return -log(s_safe) - z - 2*log1p(exp(-z))
 end
+
+"""
+    correlated_topic_lpdf(x_row, eta_row, log_phi, lse_phi)
+
+Log-likelihood of word counts for one document under a correlated topic model.
+Zero-allocation; uses inline log-sum-exp over topics.
+
+- `x_row[v]` — word counts for the document (length V)
+- `eta_row[k]` — unconstrained topic log-ratios (length K)
+- `log_phi[v, k]` — log word weights (V × K)
+- `lse_phi[k]` — precomputed `log_sum_exp(log_phi[:, k])` per topic
+
+Returns `∑_v x[v] * log(∑_k θ[k] * ϕ_norm[v,k])` where
+`θ = softmax(η)` and `ϕ_norm[v,k] = exp(log_phi[v,k]) / ∑_v exp(log_phi[v,k])`.
+"""
+function correlated_topic_lpdf(x_row, eta_row, log_phi, lse_phi)
+    V = size(log_phi, 1)
+    K = length(eta_row)
+    log_denom_eta = log_sum_exp(eta_row)
+    target = 0.0
+    @inbounds for v in 1:V
+        acc = eta_row[1] - log_denom_eta + log_phi[v, 1] - lse_phi[1]
+        for k in 2:K
+            lp = eta_row[k] - log_denom_eta + log_phi[v, k] - lse_phi[k]
+            mx = max(acc, lp)
+            acc = mx + log(exp(acc - mx) + exp(lp - mx))
+        end
+        target += x_row[v] * acc
+    end
+    return target
+end

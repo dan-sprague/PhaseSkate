@@ -34,3 +34,38 @@ function log_mix(f, weights)
     end
     return acc
 end
+
+"""
+    log_mix(a, b)
+
+Log-sum-exp of elementwise `a .+ b`, zero-allocation.
+`a` and `b` are vectors of log-values (e.g. log-weights and log-likelihoods).
+
+    log_mix(log_theta, log_phi) == log(sum(exp.(log_theta .+ log_phi)))
+"""
+function log_mix(a::AbstractVector{<:Real}, b::AbstractVector{<:Real})
+    K = length(a)
+    acc = a[1] + b[1]
+    for j in 2:K
+        lp = a[j] + b[j]
+        mx = max(acc, lp)
+        acc = mx + log(exp(acc - mx) + exp(lp - mx))
+    end
+    return acc
+end
+
+"""
+    log_mix(a, b, offset)
+
+`log_sum_exp(a .+ offset .+ b)`, zero-allocation.
+"""
+function log_mix(a::AbstractVector{<:Real}, b::AbstractVector{<:Real}, offset::Real)
+    K = length(a)
+    acc = a[1] + offset + b[1]
+    for j in 2:K
+        lp = a[j] + offset + b[j]
+        mx = max(acc, lp)
+        acc = mx + log(exp(acc - mx) + exp(lp - mx))
+    end
+    return acc
+end
