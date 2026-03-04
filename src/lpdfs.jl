@@ -45,6 +45,28 @@ function multi_normal_cholesky_lpdf(x, μ, L)
     return -T(0.5) * quad - log_det - T(0.5) * k * log(T(2π))
 end
 
+# Scalar μ — broadcasts to all dimensions.
+function multi_normal_cholesky_lpdf(x, μ::Real, L)
+    k = length(x)
+    T = eltype(x)
+
+    log_det = zero(T)
+    quad = zero(T)
+    z = similar(x, k)
+    @inbounds for i in 1:k
+        s = x[i] - T(μ)
+        for j in 1:i-1
+            s -= L[i, j] * z[j]
+        end
+        zi = s / L[i, i]
+        z[i] = zi
+        quad += zi * zi
+        log_det += log(L[i, i])
+    end
+
+    return -T(0.5) * quad - log_det - T(0.5) * k * log(T(2π))
+end
+
 # Scalar μ, σ — zero allocations.
 function multi_normal_diag_lpdf(x, μ::Real, σ::Real)
     σ_safe = max(σ, eps(typeof(float(σ))))
