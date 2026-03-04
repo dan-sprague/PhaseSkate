@@ -114,6 +114,65 @@ function ordered_transform!(y::AbstractVector{<:Real}, x::AbstractVector{<:Real}
     return log_jac
 end
 
+# ── Ordered-row simplex matrix ────────────────────────────────────────────────
+# Maps K*(V-1) unconstrained reals → K×V matrix where each row is a V-simplex
+# and column 1 is strictly increasing across rows.
+#
+# Layout in q:
+#   q[1:K]                     — first simplex param per row (ordered via cumulative exp)
+#   q[K+1 : K+(V-2)]          — remaining V-2 simplex params for row 1
+#   q[K+(V-2)+1 : K+2*(V-2)]  — remaining V-2 simplex params for row 2
+#   ...
+#
+# Since phi[k,1] = logistic(y[k,1] - log(V-1)) and logistic is monotone,
+# ordering y[k,1] across rows guarantees phi[1,1] < phi[2,1] < ... < phi[K,1].
+# Total free params: K + K*(V-2) = K*(V-1), same as pure row simplex.
+
+function ordered_simplex_matrix!(mat::AbstractMatrix{<:Real},
+                                 q::AbstractVector{<:Real},
+                                 K::Int, V::Int)
+    Vm1 = V - 1
+    Vm2 = V - 2
+    T = eltype(q)
+    log_jac = zero(T)
+    prev_ordered = q[1]
+
+    for k in 1:K
+        # ordered transform for the first simplex param of row k
+        if k == 1
+            y1 = q[1]
+        else
+            y1 = prev_ordered + exp(q[k])
+            log_jac += q[k]
+        end
+        prev_ordered = y1
+
+        # stick-breaking simplex transform for row k
+        remaining = one(T)
+
+        # first simplex element (uses ordered y1)
+        z = _logistic(y1 - log(T(Vm1)))
+        mat[k, 1] = z * remaining
+        log_jac += log(z) + log(one(T) - z) + log(remaining)
+        remaining -= mat[k, 1]
+
+        # remaining V-2 simplex elements
+        rest_base = K + (k - 1) * Vm2
+        for j in 1:Vm2
+            yj = q[rest_base + j]
+            z = _logistic(yj - log(T(Vm1 - j)))
+            mat[k, j + 1] = z * remaining
+            log_jac += log(z) + log(one(T) - z) + log(remaining)
+            remaining -= mat[k, j + 1]
+        end
+
+        # last simplex element
+        mat[k, V] = remaining
+    end
+
+    return log_jac
+end
+
 # ── Correlation Cholesky (CPC / tanh parameterization) ───────────────────────
 # Maps D*(D-1)/2 unconstrained reals → D×D lower-triangular Cholesky factor
 # of a correlation matrix (rows have unit norm, so LL^T has ones on diagonal).

@@ -117,7 +117,7 @@ struct _ParamSpec
     constraint_expr::Expr   # e.g. :(LowerBounded(0.0))
     container::Symbol       # :scalar | :vector | :simplex | :ordered | :matrix
     sizes::Vector{Any}
-    ordered_dim::Int        # matrix only: 0 = none, N = column N gets ordered constraint
+    ordered_dim::Int        # matrix only: 0 = none, N>0 = column N ordered, -1 = row simplex, -2 = row simplex + ordered col 1
 end
 
 function _parse_params(block::Expr, data_names::Set{Symbol})
@@ -203,6 +203,18 @@ function _param_to_spec(name::Symbol, args, dn::Set{Symbol})
             length(sz_args) == 2 || error("@params: param(Matrix{Float64}, n, m) takes two size arguments")
             sz1 = _resolve_size(sz_args[1], dn)
             sz2 = _resolve_size(sz_args[2], dn)
+            if is_simplex
+                (lo !== nothing || hi !== nothing) &&
+                    error("@params: simplex matrix params cannot have bounds")
+                if is_ordered !== false
+                    # simplex rows + ordered column 1 (only column 1 supported)
+                    ordered_col = is_ordered === true ? 1 : Int(is_ordered)
+                    ordered_col == 1 ||
+                        error("@params: simplex + ordered only supports column 1 (stick-breaking monotonicity)")
+                    return _ParamSpec(name, :(SimplexConstraint()), :matrix, [sz1, sz2], -2)
+                end
+                return _ParamSpec(name, :(SimplexConstraint()), :matrix, [sz1, sz2], -1)
+            end
             ordered_col = if is_ordered === false
                 0
             elseif is_ordered === true
@@ -796,10 +808,59 @@ macro skate(model_name::Symbol, body::Expr)
             K = s.sizes[1]
             D = s.sizes[2]
             od = s.ordered_dim
-            total = _mul(K, D)
 
             _mat = gensym(:mat)
-            if od > 0
+            if od == -2
+                # Row-wise simplex with ordered column 1
+                Dm1 = _sub(D, 1)
+                total = _mul(K, Dm1)
+
+                push!(unpack_stmts, quote
+                    $_mat = Matrix{Float64}(undef, $K, $D)
+                    log_jac += ordered_simplex_matrix!($_mat, @view(q[$idx : $(_sub(_add(idx, total), 1))]), $K, $D)
+                    $(s.name) = $_mat
+                end)
+
+                push!(constrain_stmts, quote
+                    $_mat = Matrix{Float64}(undef, $K, $D)
+                    ordered_simplex_matrix!($_mat, @view(q[$idx : $(_sub(_add(idx, total), 1))]), $K, $D)
+                    $(s.name) = $_mat
+                end)
+
+                idx = _add(idx, total)
+                dim_expr = _add(dim_expr, total)
+            elseif od == -1
+                # Row-wise simplex: each row is a D-simplex with D-1 free params
+                Dm1 = _sub(D, 1)
+                total = _mul(K, Dm1)
+                _k_var = gensym(:k)
+                _cs = gensym(:cs)
+                _ce = gensym(:ce)
+
+                push!(unpack_stmts, quote
+                    $_mat = Matrix{Float64}(undef, $K, $D)
+                    for $_k_var in 1:$K
+                        $_cs = $idx + ($_k_var - 1) * $Dm1
+                        $_ce = $_cs + $Dm1 - 1
+                        log_jac += simplex_transform!(@view($_mat[$_k_var, :]), @view(q[$_cs : $_ce]))
+                    end
+                    $(s.name) = $_mat
+                end)
+
+                push!(constrain_stmts, quote
+                    $_mat = Matrix{Float64}(undef, $K, $D)
+                    for $_k_var in 1:$K
+                        $_cs = $idx + ($_k_var - 1) * $Dm1
+                        $_ce = $_cs + $Dm1 - 1
+                        simplex_transform!(@view($_mat[$_k_var, :]), @view(q[$_cs : $_ce]))
+                    end
+                    $(s.name) = $_mat
+                end)
+
+                idx = _add(idx, total)
+                dim_expr = _add(dim_expr, total)
+            elseif od > 0
+                total = _mul(K, D)
                 _d_var = gensym(:d)
                 _cs = gensym(:cs)
                 _ce = gensym(:ce)
@@ -835,14 +896,18 @@ macro skate(model_name::Symbol, body::Expr)
                     end
                     $(s.name) = $_mat
                 end)
+
+                idx = _add(idx, total)
+                dim_expr = _add(dim_expr, total)
             else
+                total = _mul(K, D)
                 stop = _sub(_add(idx, total), 1)
                 push!(unpack_stmts, :($(s.name) = reshape(@view(q[$idx : $stop]), $K, $D)))
                 push!(constrain_stmts, :($(s.name) = reshape(q[$idx : $stop], $K, $D)))
-            end
 
-            idx = _add(idx, total)
-            dim_expr = _add(dim_expr, total)
+                idx = _add(idx, total)
+                dim_expr = _add(dim_expr, total)
+            end
 
         elseif s.container == :chol_corr
             D = s.sizes[1]

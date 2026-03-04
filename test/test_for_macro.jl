@@ -1071,4 +1071,45 @@ let N = 8
     println("  ✓ mixed @for and non-@for statements")
 end
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Matrix simplex (each row is a simplex)
+# ═══════════════════════════════════════════════════════════════════════════════
+@spec ForTest_MatrixSimplex begin
+    @constants begin
+        N::Int
+        K::Int
+        x::Vector{Float64}
+    end
+    @params begin
+        theta = param(Matrix{Float64}, N, K; simplex = true)
+        sigma = param(Float64; lower = 0.0)
+    end
+    @logjoint begin
+        target += normal_lpdf(sigma, 0.0, 5.0)
+        for i in 1:N
+            target += dirichlet_lpdf(@view(theta[i, :]), 1.0)
+            target += log_mix(@view(theta[i, :])) do j
+                normal_lpdf(x[i], 0.0, sigma)
+            end
+        end
+    end
+end
+
+let N = 5, K = 3
+    x = randn(N)
+    d = ForTest_MatrixSimplex_DataSet(N=N, K=K, x=x)
+    m = make_fortest_matrixsimplex(d)
+    @test m.dim == N * (K - 1) + 1  # N rows × (K-1) free + 1 for sigma
+    q = randn(m.dim)
+    ℓ = m.ℓ(q)
+    @test isfinite(ℓ)
+    # verify rows are valid simplexes
+    nt = m.constrain(q)
+    for i in 1:N
+        @test sum(nt.theta[i, :]) ≈ 1.0 atol=1e-12
+        @test all(nt.theta[i, :] .> 0.0)
+    end
+    println("  ✓ matrix simplex (row-wise)")
+end
+
 println("\n═══ All @for macro tests passed! ═══")
