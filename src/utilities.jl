@@ -5,6 +5,7 @@
 The 'Bare Metal' stability trick for Logit/Softmax math.
 """
 function log_sum_exp(x)
+    isempty(x) && throw(ArgumentError("log_sum_exp: input must be non-empty"))
     max_x = maximum(x)
     s = zero(eltype(x))
     for xi in x

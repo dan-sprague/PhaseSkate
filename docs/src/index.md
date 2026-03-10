@@ -1,16 +1,36 @@
-# PhaseSkate
+```@raw html
+---
+layout: home
 
-*Scalable, high-performance Bayesian inference in native Julia.*
+hero:
+  name: PhaseSkate
+  text: Bayesian Inference in Native Julia
+  tagline: Scalable, high-performance MCMC powered by Enzyme autodifferentiation
+  actions:
+    - theme: brand
+      text: Getting Started
+      link: /getting_started
+    - theme: alt
+      text: API Reference
+      link: /api
 
-PhaseSkate is a Bayesian inference library built **for** [Enzyme](https://github.com/EnzymeAD/Enzyme.jl) LLVM autodifferentiation. It provides a Stan-like DSL for model definition and efficient MCMC samplers optimized for CPU.
+features:
+  - icon: ⚡
+    title: Speed
+    details: Pure Julia log-density functions with zero-allocation @for macro and Enzyme reverse-mode AD. No C++ backend, no FFI overhead.
+  - icon: 🔍
+    title: Clarity
+    details: The @skate DSL defines constants, parameters, and the log-joint in a single cohesive block.
+  - icon: 📐
+    title: Explicit Accumulation
+    details: "target += normal_lpdf(x, mu, sigma) instead of tilde syntax. The log-joint accumulation is transparent."
+---
+```
 
-## Design Principles
+````@raw html
+<div class="vp-doc" style="width:80%; margin:auto">
 
-1. **Speed** — Pure Julia log-density functions with zero-allocation `@for` macro and Enzyme reverse-mode AD. No C++ backend, no FFI overhead.
-2. **Clarity** — The `@skate` DSL defines constants, parameters, and the log-joint in a single cohesive block.
-3. **Explicit accumulation** — `target += normal_lpdf(x, mu, sigma)` instead of tilde syntax. The log-joint accumulation is transparent.
-
-## Quick Example
+<h2> Quick Example </h2>
 
 ```julia
 using PhaseSkate
@@ -42,9 +62,5 @@ mean(ch, :mu)    # posterior mean
 ci(ch, :mu)      # 95% credible interval
 ```
 
-## Contents
-
-```@contents
-Pages = ["getting_started.md", "dsl.md", "samplers.md", "api.md"]
-Depth = 2
-```
+</div>
+````

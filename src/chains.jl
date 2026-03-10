@@ -111,6 +111,7 @@ Element-wise credible interval for parameter `name`, pooling all chains.
 Returns `(lower, upper)`, each matching the parameter's original shape.
 """
 function ci(c::Chains, name::Symbol; level::Float64=0.95)
+    (0 < level < 1) || throw(ArgumentError("ci: level must be in (0, 1), got $level"))
     info = c.name_map[name]
     α = (1 - level) / 2
     ncols = length(info.cols)
@@ -156,6 +157,7 @@ end
 Thin a Chains object to M evenly-spaced draws per chain.
 """
 function thin(c::Chains, M::Int)
+    M > 0 || throw(ArgumentError("thin: M must be > 0, got $M"))
     ns = size(c.data, 1)
     M_per_chain = min(M, ns)
     idx = round.(Int, range(1, ns, length=M_per_chain))

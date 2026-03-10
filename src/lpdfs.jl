@@ -28,6 +28,11 @@ function multi_normal_cholesky_lpdf(x, μ, L)
     k = length(x)
     T = eltype(x)
 
+    # Check for non-positive diagonal (degenerate Cholesky)
+    @inbounds for i in 1:k
+        L[i, i] <= 0 && return T(-Inf)
+    end
+
     log_det = zero(T)
     quad = zero(T)
     z = similar(x, k)
@@ -49,6 +54,11 @@ end
 function multi_normal_cholesky_lpdf(x, μ::Real, L)
     k = length(x)
     T = eltype(x)
+
+    # Check for non-positive diagonal (degenerate Cholesky)
+    @inbounds for i in 1:k
+        L[i, i] <= 0 && return T(-Inf)
+    end
 
     log_det = zero(T)
     quad = zero(T)
@@ -246,7 +256,13 @@ end
 """
 function lkj_corr_cholesky_lpdf(L, η)
     K = size(L, 1)
-    s = zero(eltype(L))
+    T = eltype(L)
+    # Reject non-positive diagonal or non-positive η
+    η <= 0 && return T(-Inf)
+    @inbounds for i in 1:K
+        L[i, i] <= 0 && return T(-Inf)
+    end
+    s = zero(T)
     for i in 1:K
         s += (K - i + 2*(η - 1)) * log(L[i, i])
     end
@@ -255,6 +271,7 @@ end
 
 # Beta: logpdf(Beta(α, β), x)
 function beta_lpdf(x, α, β)
+    (x < 0 || x > 1) && return oftype(float(x), -Inf)
     x_safe = clamp(x, eps(typeof(float(x))), one(x) - eps(typeof(float(x))))
     α_safe = max(α, eps(typeof(float(α))))
     β_safe = max(β, eps(typeof(float(β))))
@@ -314,6 +331,7 @@ function dirichlet_lpdf(x, α::Real)
 end
 
 function uniform_lpdf(x, lo, hi)
+    lo >= hi && throw(ArgumentError("uniform_lpdf: lo must be < hi"))
     return -log(hi - lo)
 end
 

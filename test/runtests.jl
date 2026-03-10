@@ -6,6 +6,9 @@ using Distributions
 using Enzyme
 using FiniteDifferences
 
+# Resolve name conflicts between Distributions.sample and PhaseSkate.sample
+const sample = PhaseSkate.sample
+
 @testset "PhaseSkate" begin
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -221,6 +224,336 @@ end
 
     ess_val = min_ess(ch)
     @test ess_val > 0
+end
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Regression Tests — Untested lpdf Functions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@testset "Scalar lpdf Regression" begin
+    @testset "lognormal_lpdf" begin
+        for (x, μ, σ) in [(1.0, 0.0, 1.0), (2.5, 1.0, 0.5), (0.1, -1.0, 2.0)]
+            @test lognormal_lpdf(x, μ, σ) ≈ logpdf(LogNormal(μ, σ), x)
+        end
+    end
+
+    @testset "student_t_lpdf" begin
+        for (x, ν, μ, σ) in [(0.0, 3.0, 0.0, 1.0), (1.5, 5.0, 1.0, 2.0), (-2.0, 1.0, 0.0, 0.5)]
+            @test student_t_lpdf(x, ν, μ, σ) ≈ logpdf(LocationScale(μ, σ, TDist(ν)), x)
+        end
+    end
+
+    @testset "uniform_lpdf" begin
+        for (x, lo, hi) in [(0.5, 0.0, 1.0), (3.0, 2.0, 5.0), (-1.0, -2.0, 0.0)]
+            @test uniform_lpdf(x, lo, hi) ≈ logpdf(Uniform(lo, hi), x)
+        end
+    end
+
+    @testset "laplace_lpdf" begin
+        for (x, μ, b) in [(0.0, 0.0, 1.0), (2.0, 1.0, 0.5), (-3.0, 0.0, 2.0)]
+            @test laplace_lpdf(x, μ, b) ≈ logpdf(Laplace(μ, b), x)
+        end
+    end
+
+    @testset "logistic_lpdf" begin
+        for (x, μ, s) in [(0.0, 0.0, 1.0), (2.0, 1.0, 0.5), (-3.0, 0.0, 2.0)]
+            @test logistic_lpdf(x, μ, s) ≈ logpdf(Logistic(μ, s), x)
+        end
+    end
+
+    @testset "neg_binomial_2_lpdf" begin
+        for (y, μ, ϕ) in [(0, 5.0, 2.0), (3, 10.0, 1.0), (10, 3.0, 5.0)]
+            p = ϕ / (ϕ + μ)
+            r = ϕ
+            @test neg_binomial_2_lpdf(y, μ, ϕ) ≈ logpdf(NegativeBinomial(r, p), y)
+        end
+    end
+
+    @testset "bernoulli_logit_lpdf" begin
+        for (y, α) in [(1, 0.0), (0, 2.0), (1, -1.5)]
+            p = 1.0 / (1.0 + exp(-α))
+            @test bernoulli_logit_lpdf(y, α) ≈ logpdf(Bernoulli(p), y)
+        end
+    end
+
+    @testset "binomial_logit_lpdf" begin
+        for (y, n, α) in [(3, 10, 0.0), (0, 5, -1.0), (7, 10, 1.5)]
+            p = 1.0 / (1.0 + exp(-α))
+            @test PhaseSkate.binomial_logit_lpdf(y, n, α) ≈ logpdf(Binomial(n, p), y)
+        end
+    end
+
+    @testset "categorical_logit_lpdf" begin
+        α = [1.0, 2.0, 0.5]
+        softmax_α = exp.(α) ./ sum(exp.(α))
+        for y in 1:3
+            @test categorical_logit_lpdf(y, α) ≈ logpdf(Categorical(softmax_α), y)
+        end
+    end
+
+    @testset "weibull_logsigma_lpdf" begin
+        for (x, α, log_σ) in [(1.0, 2.0, 0.0), (0.5, 1.5, -0.5), (2.0, 0.8, 1.0)]
+            @test weibull_logsigma_lpdf(x, α, log_σ) ≈ weibull_lpdf(x, α, exp(log_σ))
+        end
+    end
+end
+
+@testset "Multivariate lpdf Regression" begin
+    @testset "multi_normal_diag_lpdf — all overloads" begin
+        x = [1.0, -0.5, 0.3]
+
+        # Scalar μ, scalar σ
+        @test multi_normal_diag_lpdf(x, 0.0, 1.0) ≈ logpdf(MvNormal(zeros(3), I), x)
+
+        # Vector μ, scalar σ
+        μ_vec = [0.5, -0.5, 0.0]
+        @test multi_normal_diag_lpdf(x, μ_vec, 2.0) ≈ logpdf(MvNormal(μ_vec, 4.0 * I), x)
+
+        # Vector μ, vector σ
+        σ_vec = [1.0, 2.0, 0.5]
+        Σ_diag = Diagonal(σ_vec .^ 2)
+        @test multi_normal_diag_lpdf(x, μ_vec, σ_vec) ≈ logpdf(MvNormal(μ_vec, Σ_diag), x)
+    end
+
+    @testset "multi_normal_cholesky_scaled_lpdf" begin
+        x = [1.0, -0.5]
+        μ = [0.0, 0.0]
+        log_sigma = [log(2.0), log(3.0)]
+        L_corr = LowerTriangular([1.0 0.0; 0.3 sqrt(1 - 0.09)])
+        L_full = diag_pre_multiply(exp.(log_sigma), L_corr)
+        @test multi_normal_cholesky_scaled_lpdf(x, μ, log_sigma, L_corr) ≈ multi_normal_cholesky_lpdf(x, μ, L_full)
+    end
+
+    @testset "dirichlet_lpdf" begin
+        x = [0.2, 0.3, 0.5]
+        α_vec = [2.0, 3.0, 1.0]
+        @test dirichlet_lpdf(x, α_vec) ≈ logpdf(Dirichlet(α_vec), x)
+
+        # Scalar α overload
+        @test dirichlet_lpdf(x, 2.0) ≈ logpdf(Dirichlet(3, 2.0), x)
+    end
+
+    @testset "correlated_topic_lpdf" begin
+        # K=2 topics, V=3 words — hand-computed
+        eta = [0.0, 0.0]  # equal topic weights → θ = [0.5, 0.5]
+        log_phi = [log(0.5) log(0.3);
+                   log(0.3) log(0.5);
+                   log(0.2) log(0.2)]
+        lse_phi = [log(0.5 + 0.3 + 0.2), log(0.3 + 0.5 + 0.2)]
+        x_row = [10.0, 5.0, 3.0]
+
+        result = correlated_topic_lpdf(x_row, eta, log_phi, lse_phi)
+        @test isfinite(result)
+
+        # Manual: with equal θ, p(w=v) = 0.5*(phi_norm[v,1] + phi_norm[v,2])
+        # phi_norm[:,k] = phi[:,k] / sum(phi[:,k]) — but phi already sums to 1 per topic
+        p_word = 0.5 .* [0.5, 0.3, 0.2] .+ 0.5 .* [0.3, 0.5, 0.2]
+        expected = sum(x_row .* log.(p_word))
+        @test result ≈ expected
+    end
+end
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Regression Tests — Untested Bijections
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@testset "Bijection Regression" begin
+    @testset "UpperBounded" begin
+        c = UpperBounded(5.0)
+        y = transform(c, 0.0)
+        @test y < 5.0
+        @test isfinite(log_abs_det_jacobian(c, 0.0))
+    end
+
+    @testset "SimplexConstraint" begin
+        y = randn(2)  # K-1 = 2, K = 3
+        x, log_jac = simplex_transform(y)
+        @test length(x) == 3
+        @test sum(x) ≈ 1.0
+        @test all(0 .< x .< 1)
+        @test isfinite(log_jac)
+
+        # simplex_transform! matches simplex_transform
+        x2 = similar(x)
+        log_jac2 = simplex_transform!(x2, y)
+        @test x2 ≈ x
+        @test log_jac2 ≈ log_jac
+
+        # Extreme values still sum to 1
+        x_extreme, _ = simplex_transform([100.0, -100.0])
+        @test sum(x_extreme) ≈ 1.0 atol=1e-10
+    end
+
+    @testset "OrderedConstraint" begin
+        x = randn(4)
+        y, log_jac = ordered_transform(x)
+        @test issorted(y)
+        @test isfinite(log_jac)
+
+        # ordered_transform! matches ordered_transform
+        y2 = similar(y)
+        log_jac2 = PhaseSkate.ordered_transform!(y2, x)
+        @test y2 ≈ y
+        @test log_jac2 ≈ log_jac
+
+        # Also test via struct interface
+        oc = OrderedConstraint()
+        y3 = transform(oc, x)
+        @test y3 ≈ y
+    end
+
+    @testset "corr_cholesky_transform" begin
+        # D=2: 1 free param
+        z2 = [0.5]
+        L2, jac2 = corr_cholesky_transform(z2, 2)
+        R2 = L2 * L2'
+        @test R2[1,1] ≈ 1.0
+        @test R2[2,2] ≈ 1.0
+        @test isfinite(jac2)
+        @test all(eigvals(Symmetric(R2)) .> 0)
+
+        # D=3: 3 free params
+        z3 = [0.0, 0.3, -0.5]
+        L3, jac3 = corr_cholesky_transform(z3, 3)
+        R3 = L3 * L3'
+        for i in 1:3
+            @test R3[i,i] ≈ 1.0
+        end
+        @test isfinite(jac3)
+        @test all(eigvals(Symmetric(R3)) .> 0)
+    end
+
+    @testset "ordered_simplex_matrix!" begin
+        K, V = 2, 3
+        q = randn(K * (V - 1))
+        mat = zeros(K, V)
+        log_jac = ordered_simplex_matrix!(mat, q, K, V)
+
+        # Each row sums to 1
+        for k in 1:K
+            @test sum(mat[k, :]) ≈ 1.0
+        end
+        # First column strictly increasing
+        @test mat[1, 1] < mat[2, 1]
+        @test isfinite(log_jac)
+    end
+end
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Regression Tests — Utilities and Chain Diagnostics
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@testset "Utility Regression" begin
+    @testset "log_sum_exp" begin
+        @test log_sum_exp([0.0]) == 0.0
+        @test log_sum_exp([0.0, 0.0]) ≈ log(2)
+        # Numerical stability with extreme values
+        @test log_sum_exp([-1000.0, -1000.0]) ≈ -1000.0 + log(2)
+    end
+
+    @testset "log_mix — callback overload" begin
+        # Equal weights, same component → simplifies to single component
+        weights = [0.5, 0.5]
+        result = log_mix(weights) do j
+            normal_lpdf(0.0, 0.0, 1.0)
+        end
+        @test result ≈ normal_lpdf(0.0, 0.0, 1.0)
+    end
+
+    @testset "log_mix — two-vector overload" begin
+        log_w = [log(0.3), log(0.7)]
+        log_lik = [-1.0, -2.0]
+        expected = log(0.3 * exp(-1.0) + 0.7 * exp(-2.0))
+        @test log_mix(log_w, log_lik) ≈ expected
+    end
+
+    @testset "log_mix — three-arg overload" begin
+        a = [log(0.3), log(0.7)]
+        b = [-1.0, -2.0]
+        offset = 0.5
+        expected = log_mix(a .+ offset, b)
+        @test log_mix(a, b, offset) ≈ expected
+    end
+end
+
+@testset "Chain Diagnostics Regression" begin
+    # Build a minimal Chains object for testing ci and thin
+    y_data = randn(20)
+    d = SimpleNormalData(N=20, y=y_data)
+    m = make(d)
+    ch = sample(m, 200; warmup=100, chains=2, seed=123)
+
+    @testset "ci" begin
+        lo95, hi95 = ci(ch, :mu; level=0.95)
+        mu_mean = mean(ch, :mu)
+        @test lo95 < mu_mean < hi95
+
+        # Narrower at level=0.5
+        lo50, hi50 = ci(ch, :mu; level=0.5)
+        @test (hi50 - lo50) < (hi95 - lo95)
+    end
+
+    @testset "thin" begin
+        ch_thin = thin(ch, 50)
+        @test size(ch_thin.data, 1) == 50
+
+        # M > nsamples → clamped to nsamples
+        ch_big = thin(ch, 10000)
+        @test size(ch_big.data, 1) == size(ch.data, 1)
+    end
+end
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Error Handling Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+using PhaseSkate: WelfordState, welford_update!
+
+@testset "Argument Error Guards" begin
+    @test_throws ArgumentError uniform_lpdf(0.5, 5.0, 2.0)   # lo > hi
+    @test_throws ArgumentError uniform_lpdf(0.5, 3.0, 3.0)   # lo == hi
+    @test_throws ArgumentError log_sum_exp(Float64[])
+
+    @testset "welford_update! dimension mismatch" begin
+        ws = WelfordState(3)
+        @test_throws ArgumentError welford_update!(ws, [1.0, 2.0])  # wrong length
+    end
+
+    @testset "ci level out of range" begin
+        y_data = randn(20)
+        d = SimpleNormalData(N=20, y=y_data)
+        m = make(d)
+        ch = sample(m, 50; warmup=25, chains=1, seed=99)
+        @test_throws ArgumentError ci(ch, :mu; level=0.0)
+        @test_throws ArgumentError ci(ch, :mu; level=1.0)
+        @test_throws ArgumentError ci(ch, :mu; level=-0.5)
+    end
+
+    @testset "thin M <= 0" begin
+        y_data = randn(20)
+        d = SimpleNormalData(N=20, y=y_data)
+        m = make(d)
+        ch = sample(m, 50; warmup=25, chains=1, seed=99)
+        @test_throws ArgumentError thin(ch, 0)
+        @test_throws ArgumentError thin(ch, -1)
+    end
+end
+
+@testset "Boundary Value Tests" begin
+    @testset "beta_lpdf at support boundaries" begin
+        # At exact boundaries (0 and 1) — should be finite for α,β > 1
+        @test isfinite(beta_lpdf(0.0, 2.0, 2.0))
+        @test isfinite(beta_lpdf(1.0, 2.0, 2.0))
+        # Outside support
+        @test beta_lpdf(-0.1, 2.0, 2.0) == -Inf
+        @test beta_lpdf(1.1, 2.0, 2.0) == -Inf
+    end
+
+    @testset "simplex_transform extreme inputs" begin
+        x, _ = simplex_transform([100.0, -100.0])
+        @test sum(x) ≈ 1.0 atol=1e-10
+        @test all(xi -> 0 ≤ xi ≤ 1, x)
+    end
 end
 
 end # @testset "PhaseSkate"

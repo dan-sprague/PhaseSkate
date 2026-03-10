@@ -1,6 +1,124 @@
 
 import Base.@kwdef
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Known lpdf/lccdf function names (for typo detection)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+const _KNOWN_LPDF_NAMES = Set{Symbol}([
+    :normal_lpdf, :cauchy_lpdf, :exponential_lpdf, :gamma_lpdf, :beta_lpdf,
+    :lognormal_lpdf, :student_t_lpdf, :uniform_lpdf, :laplace_lpdf, :logistic_lpdf,
+    :weibull_lpdf, :weibull_logsigma_lpdf, :weibull_lccdf, :weibull_logsigma_lccdf,
+    :poisson_lpdf, :binomial_lpdf, :bernoulli_logit_lpdf, :binomial_logit_lpdf,
+    :neg_binomial_2_lpdf, :beta_binomial_lpdf, :categorical_logit_lpdf,
+    :dirichlet_lpdf, :multi_normal_diag_lpdf, :multi_normal_cholesky_lpdf,
+    :multi_normal_cholesky_scaled_lpdf, :lkj_corr_cholesky_lpdf,
+    :correlated_topic_lpdf,
+])
+
+"""Simple edit distance for typo suggestions (Levenshtein)."""
+function _edit_distance(a::AbstractString, b::AbstractString)
+    m, n = length(a), length(b)
+    d = zeros(Int, m + 1, n + 1)
+    for i in 0:m; d[i+1, 1] = i; end
+    for j in 0:n; d[1, j+1] = j; end
+    for i in 1:m, j in 1:n
+        cost = a[i] == b[j] ? 0 : 1
+        d[i+1, j+1] = min(d[i, j+1] + 1, d[i+1, j] + 1, d[i, j] + 1 - (1 - cost))
+    end
+    d[m+1, n+1]
+end
+
+"""Find the closest known lpdf name to `name`, or nothing if no close match."""
+function _suggest_lpdf(name::Symbol)
+    s = string(name)
+    best_name = nothing
+    best_dist = typemax(Int)
+    for known in _KNOWN_LPDF_NAMES
+        d = _edit_distance(s, string(known))
+        if d < best_dist
+            best_dist = d
+            best_name = known
+        end
+    end
+    # Only suggest if within ~30% of the name length
+    best_dist <= max(2, length(s) ÷ 3) ? best_name : nothing
+end
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# @logjoint body validation helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+"""Collect all free symbols referenced in an expression (excluding function call names)."""
+function _collect_refs(ex, refs::Set{Symbol})
+    if ex isa Symbol
+        push!(refs, ex)
+    elseif ex isa Expr
+        if ex.head == :call
+            # skip function name (args[1]), recurse into arguments only
+            for a in ex.args[2:end]
+                _collect_refs(a, refs)
+            end
+        elseif ex.head == :. && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head == :tuple
+            # dot-call like f.(args...) — skip function name
+            for a in ex.args[2].args
+                _collect_refs(a, refs)
+            end
+        elseif ex.head == :macrocall
+            # skip macro name, recurse into rest
+            for a in ex.args[2:end]
+                _collect_refs(a, refs)
+            end
+        else
+            for a in ex.args
+                _collect_refs(a, refs)
+            end
+        end
+    end
+end
+
+"""Collect all symbols assigned (LHS of =) in a statement list."""
+function _collect_assigns(stmts, assigned::Set{Symbol})
+    for s in stmts
+        s isa Expr || continue
+        if s.head == :(=) && s.args[1] isa Symbol
+            push!(assigned, s.args[1])
+        elseif s.head == :block
+            _collect_assigns(s.args, assigned)
+        elseif s.head == :for && length(s.args) >= 2
+            # for loop — collect iteration variable and body assigns
+            iter = s.args[1]
+            if iter isa Expr && iter.head == :(=) && iter.args[1] isa Symbol
+                push!(assigned, iter.args[1])
+            end
+            _collect_assigns(s.args[2:end], assigned)
+        end
+    end
+end
+
+"""Check if an expression is a bare lpdf/lccdf call (not wrapped in target +=)."""
+function _is_bare_lpdf_call(ex)
+    ex isa Expr || return false
+    if ex.head == :call && ex.args[1] isa Symbol
+        name = string(ex.args[1])
+        return endswith(name, "_lpdf") || endswith(name, "_lccdf") || endswith(name, "_lcdf")
+    end
+    false
+end
+
+"""Collect all function call names in an expression."""
+function _collect_call_names(ex, names::Set{Symbol})
+    ex isa Expr || return
+    if ex.head == :call && ex.args[1] isa Symbol
+        push!(names, ex.args[1])
+    elseif ex.head == :. && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head == :tuple
+        ex.args[1] isa Symbol && push!(names, ex.args[1])
+    end
+    for a in ex.args
+        _collect_call_names(a, names)
+    end
+end
+
 """Replace `var` with `replacement` throughout an expression."""
 function _subst_var(ex, var::Symbol, replacement)
     ex isa Symbol && ex == var && return replacement
@@ -91,18 +209,47 @@ function _resolve_size(arg, dn::Set{Symbol})
 end
 _lines(b::Expr) = filter(x -> !(x isa LineNumberNode), b.args)
 
+const _SUPPORTED_CONSTANT_TYPES = Set{Symbol}([:Int, :Float64])
+const _SUPPORTED_CONSTANT_CONTAINER_TYPES = Set{Symbol}([:Vector, :Matrix])
+
 function _parse_constants(block::Expr)
     fields = Expr[]
     names = Symbol[]
     for line in _lines(block)
-        line isa Expr && line.head == :(::) || continue
-        var = line.args[1]
-        typespec = line.args[2]
-        var isa Symbol || @warn "Expected a Symbol, got $(typeof(var)), ignoring." continue
-        push!(fields, :($var::$(_dsl_to_julia_type(typespec))))
-        push!(names, var)
+        line isa Expr || continue
+
+        if line.head == :(::)
+            var = line.args[1]
+            typespec = line.args[2]
+            var isa Symbol || error(
+                "@constants: expected 'name::Type', got '$(line)'. " *
+                "Each entry must be a simple name with a type annotation.")
+            # Validate the type
+            if typespec isa Symbol && typespec ∉ _SUPPORTED_CONSTANT_TYPES
+                error("@constants: unsupported type '$typespec' for '$var'. " *
+                      "Supported types: Int, Float64, Vector{Float64}, Vector{Int}, Matrix{Float64}")
+            end
+            push!(fields, :($var::$(_dsl_to_julia_type(typespec))))
+            push!(names, var)
+
+        elseif line.head == :(=)
+            # Common mistake: trying to assign a value
+            error("@constants: got '$line' — use 'name::Type' to declare data types. " *
+                  "Assign values when constructing the Data struct, e.g. ModelData($(line.args[1])=...)")
+        elseif line.head == :call || (line.head == :ref)
+            error("@constants: unexpected expression '$(line)'. " *
+                  "Each entry must be 'name::Type' (e.g. N::Int, y::Vector{Float64})")
+        else
+            # Bare symbol without type annotation
+            if line isa Symbol
+                error("@constants: '$line' is missing a type annotation. " *
+                      "Use '$line::Type' (e.g. $line::Int or $line::Vector{Float64})")
+            end
+            error("@constants: unexpected expression '$(line)'. " *
+                  "Each entry must be 'name::Type' (e.g. N::Int, y::Vector{Float64})")
+        end
     end
-    fields,names
+    fields, names
 end
 
 function _dsl_to_julia_type(spec)
@@ -129,6 +276,7 @@ end
 
 function _parse_params(block::Expr, data_names::Set{Symbol})
     specs = _ParamSpec[]
+    seen_names = Set{Symbol}()
     for line in _lines(block)
         line isa Expr || continue
 
@@ -138,6 +286,12 @@ function _parse_params(block::Expr, data_names::Set{Symbol})
             var isa Symbol || error(
                 "@params: '$var::$T' — bare annotations only support Float64. " *
                 "For vectors and matrices use param(Vector{Float64}, n, ...)")
+            var ∈ seen_names && error(
+                "@params: duplicate parameter name '$var'. Each parameter must have a unique name.")
+            var ∈ data_names && error(
+                "@params: parameter '$var' shadows a @constants name. " *
+                "Use a different name to avoid ambiguity.")
+            push!(seen_names, var)
             push!(specs, _ParamSpec(var, :(IdentityConstraint()), :scalar, [], 0))
 
         elseif line.head == :(=)
@@ -145,6 +299,12 @@ function _parse_params(block::Expr, data_names::Set{Symbol})
             rhs = line.args[2]
             rhs isa Expr && rhs.head == :call && rhs.args[1] == :param || error(
                 "@params: '$var = $rhs' — expected a call to param(...)")
+            var isa Symbol && var ∈ seen_names && error(
+                "@params: duplicate parameter name '$var'. Each parameter must have a unique name.")
+            var isa Symbol && var ∈ data_names && error(
+                "@params: parameter '$var' shadows a @constants name. " *
+                "Use a different name to avoid ambiguity.")
+            var isa Symbol && push!(seen_names, var)
             push!(specs, _param_to_spec(var, rhs.args[2:end], data_names))
         end
     end
@@ -266,7 +426,7 @@ end
 # @for broadcast-to-loop unrolling (CPU only — XLA prefers broadcasts)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@enum _ShapeKind _shape_scalar _shape_vector _shape_matrix
+@enum _ShapeKind _shape_scalar _shape_vector _shape_matrix _shape_unknown
 
 struct _ShapeInfo
     kind::_ShapeKind
@@ -277,6 +437,7 @@ end
 _scalar_shape() = _ShapeInfo(_shape_scalar, nothing, nothing)
 _vector_shape(len) = _ShapeInfo(_shape_vector, len, nothing)
 _matrix_shape(nrows, ncols) = _ShapeInfo(_shape_matrix, nrows, ncols)
+_unknown_shape() = _ShapeInfo(_shape_unknown, nothing, nothing)
 
 """Build initial shape environment from @params and @constants declarations."""
 function _build_shape_env(param_specs, data_fields)
@@ -355,31 +516,43 @@ function _mat_slice_parts(ex)
     return base, col_idx, col_idx
 end
 
-"""Recursive shape inference for expressions."""
+"""Recursive shape inference for expressions.
+
+Returns `_unknown_shape()` when the shape cannot be determined (e.g. undefined symbol).
+Returns `_scalar_shape()` only when the expression is *known* to be scalar.
+This distinction allows `@for` to error on ambiguous shapes rather than silently
+treating unknown expressions as scalars.
+"""
 function _infer_shape(ex, env::Dict{Any, _ShapeInfo})
     ex isa Number && return _scalar_shape()
 
     if ex isa Symbol
         haskey(env, ex) && return env[ex]
-        return _scalar_shape()
+        # Unknown symbol — could be a local variable, Julia builtin, etc.
+        return _unknown_shape()
     end
 
-    ex isa Expr || return _scalar_shape()
+    ex isa Expr || return _unknown_shape()
 
     if _is_data_ref(ex)
         key = _data_key(ex)
         haskey(env, key) && return env[key]
-        return _scalar_shape()
+        return _unknown_shape()
     end
 
-    # Dot-call: f.(args...)
+    # Dot-call: f.(args...) — always broadcasts to vector if any arg is vector
     if ex.head == :. && length(ex.args) == 2 &&
        ex.args[2] isa Expr && ex.args[2].head == :tuple
         for a in ex.args[2].args
             s = _infer_shape(a, env)
             s.kind == _shape_vector && return s
         end
-        return _scalar_shape()
+        # All args are scalar or unknown — if all known scalar, return scalar
+        all_known = all(ex.args[2].args) do a
+            s = _infer_shape(a, env)
+            s.kind == _shape_scalar
+        end
+        return all_known ? _scalar_shape() : _unknown_shape()
     end
 
     if ex.head == :call
@@ -391,7 +564,11 @@ function _infer_shape(ex, env::Dict{Any, _ShapeInfo})
                 s = _infer_shape(a, env)
                 s.kind == _shape_vector && return s
             end
-            return _scalar_shape()
+            all_known = all(operands) do a
+                s = _infer_shape(a, env)
+                s.kind == _shape_scalar
+            end
+            return all_known ? _scalar_shape() : _unknown_shape()
         end
 
         if op == :* && length(operands) == 2
@@ -407,16 +584,27 @@ function _infer_shape(ex, env::Dict{Any, _ShapeInfo})
             end
             if s1.kind == _shape_vector return s1 end
             if s2.kind == _shape_vector return s2 end
-            return _scalar_shape()
+            # Both scalar or both unknown — known scalar only if both known scalar
+            if s1.kind == _shape_scalar && s2.kind == _shape_scalar
+                return _scalar_shape()
+            end
+            return _unknown_shape()
         end
 
+        # sum() always returns scalar
         op == :sum && return _scalar_shape()
 
+        # Other function calls: if any arg is vector, result is vector (broadcast semantics)
         for a in operands
             s = _infer_shape(a, env)
             s.kind == _shape_vector && return s
         end
-        return _scalar_shape()
+        # Known scalar only if all operands are known scalar
+        all_known = all(operands) do a
+            s = _infer_shape(a, env)
+            s.kind == _shape_scalar
+        end
+        return all_known ? _scalar_shape() : _unknown_shape()
     end
 
     if ex.head == :ref
@@ -429,24 +617,80 @@ function _infer_shape(ex, env::Dict{Any, _ShapeInfo})
             if idx_shape.kind == _shape_vector
                 return _vector_shape(idx_shape.len)
             end
-            return _scalar_shape()
+            return _scalar_shape()  # scalar index into known vector = scalar
         end
 
         if base_shape.kind == _shape_matrix && length(indices) == 2
             if _is_slice_index(indices[1])
                 return _matrix_shape(base_shape.len, nothing)
             end
+            # Single element of a matrix is scalar
+            return _scalar_shape()
         end
     end
 
-    return _scalar_shape()
+    return _unknown_shape()
+end
+
+"""Like _infer_shape but treats unknown as scalar (for non-@for contexts).
+
+Outside of @for, unknown shapes are safe to treat as scalar because
+they are just regular Julia expressions. This is used by _expand_for_block
+to decide which statements need loop expansion vs. which are scalar."""
+function _infer_shape_permissive(ex, env::Dict{Any, _ShapeInfo})
+    s = _infer_shape(ex, env)
+    s.kind == _shape_unknown ? _scalar_shape() : s
+end
+
+"""Find symbols in an expression whose shape is unknown (not in env)."""
+function _find_unknown_symbols(ex, env::Dict{Any, _ShapeInfo})
+    unknowns = Symbol[]
+    _find_unknown_symbols!(ex, env, unknowns)
+    unique(unknowns)
+end
+
+function _find_unknown_symbols!(ex, env, unknowns::Vector{Symbol})
+    if ex isa Symbol
+        if !haskey(env, ex) && ex ∉ (:+, :-, :*, :/, :^, :log, :exp, :sqrt, :abs,
+                                      :log1p, :max, :min, :clamp, :sum, :length, :eps)
+            push!(unknowns, ex)
+        end
+        return
+    end
+    if ex isa Expr
+        if _is_data_ref(ex)
+            key = _data_key(ex)
+            if !haskey(env, key)
+                # Extract the variable name from data.X
+                push!(unknowns, ex.args[2].value)
+            end
+            return
+        end
+        if ex.head == :call
+            # Skip function name, recurse args
+            for a in ex.args[2:end]
+                _find_unknown_symbols!(a, env, unknowns)
+            end
+        elseif ex.head == :. && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head == :tuple
+            # Dot-call: skip function name
+            for a in ex.args[2].args
+                _find_unknown_symbols!(a, env, unknowns)
+            end
+        else
+            for a in ex.args
+                _find_unknown_symbols!(a, env, unknowns)
+            end
+        end
+    end
 end
 
 """Core: scalarize a broadcast expression for loop index `idx`."""
 function _scalarize(ex, idx::Symbol, env::Dict{Any, _ShapeInfo}, preamble::Vector{Expr})
     shape = _infer_shape(ex, env)
 
-    if shape.kind == _shape_scalar
+    if shape.kind == _shape_scalar || shape.kind == _shape_unknown
+        # Unknown shapes are treated as scalar pass-through in scalarize.
+        # The validation happens at the @for expansion level, not here.
         return ex
     end
 
@@ -524,6 +768,20 @@ function _expand_for_assign(stmt, env)
     lhs = stmt.args[1]
     rhs = stmt.args[2]
     shape = _infer_shape(rhs, env)
+
+    if shape.kind == _shape_unknown
+        # Collect which subexpressions have unknown shape
+        unknowns = _find_unknown_symbols(rhs, env)
+        error("@for: cannot determine shape of '$lhs = $rhs'. " *
+              "Unknown variables: $(join(unknowns, ", ")). " *
+              "All variables in @for must be declared in @constants, @params, " *
+              "or a preceding @for/@let block.")
+    end
+    if shape.kind == _shape_scalar
+        error("@for: RHS of '$lhs = $rhs' inferred as scalar, not a vector. " *
+              "@for only expands broadcast (vectorized) expressions. " *
+              "Use a plain assignment instead.")
+    end
     len_expr = shape.len
 
     idx = gensym(:i)
@@ -546,16 +804,42 @@ function _expand_for_block(block, env)
     stmts = _lines(block)
     isempty(stmts) && return block
 
+    # First pass: infer shapes incrementally (each LHS feeds into subsequent RHS)
+    # Use a temporary env copy so we can add LHS shapes as we go.
+    tmp_env = copy(env)
     len_expr = nothing
+    unknown_stmts = Tuple{Any,Any,Vector{Symbol}}[]
     for s in stmts
         s isa Expr && s.head == :(=) || continue
-        shape = _infer_shape(s.args[2], env)
+        shape = _infer_shape(s.args[2], tmp_env)
         if shape.kind == _shape_vector && shape.len !== nothing
-            len_expr = shape.len
-            break
+            len_expr === nothing && (len_expr = shape.len)
+            # Register this LHS as a vector so subsequent RHS expressions can see it
+            tmp_env[s.args[1]] = _vector_shape(shape.len)
+        elseif shape.kind == _shape_unknown
+            unknowns = _find_unknown_symbols(s.args[2], tmp_env)
+            push!(unknown_stmts, (s.args[1], s.args[2], unknowns))
         end
     end
-    len_expr === nothing && error("@for block: could not infer loop dimension")
+
+    if !isempty(unknown_stmts)
+        msgs = ["  $(u[1]) = $(u[2])  (unknown: $(join(u[3], ", ")))" for u in unknown_stmts]
+        error("@for block: cannot determine shape of some expressions:\n" *
+              join(msgs, "\n") * "\n" *
+              "All variables in @for must be declared in @constants, @params, " *
+              "or a preceding @for/@let block.")
+    end
+
+    if len_expr === nothing
+        lhs_names = [s.args[1] for s in stmts if s isa Expr && s.head == :(=)]
+        rhs_exprs = [s.args[2] for s in stmts if s isa Expr && s.head == :(=)]
+        error("@for block: could not infer loop dimension. " *
+              "All RHS expressions inferred as scalar, not vector.\n" *
+              "  LHS variables: $(join(lhs_names, ", "))\n" *
+              "  RHS expressions: $(join(rhs_exprs, "; "))\n" *
+              "Hint: at least one operand must be a declared Vector from @constants or @params, " *
+              "or a broadcast (.+, .-, .*, ./) over one.")
+    end
 
     idx = gensym(:i)
     allocs = Expr[]
@@ -593,6 +877,18 @@ function _expand_for_sum(stmt, env)
     inner = rhs.args[2]
 
     shape = _infer_shape(inner, env)
+
+    if shape.kind == _shape_unknown
+        unknowns = _find_unknown_symbols(inner, env)
+        error("@for: cannot determine shape of 'target += sum($inner)'. " *
+              "Unknown variables: $(join(unknowns, ", ")). " *
+              "All variables in @for must be declared in @constants, @params, " *
+              "or a preceding @for/@let block.")
+    end
+    if shape.kind != _shape_vector
+        error("@for: 'sum($inner)' does not contain a vector expression. " *
+              "@for target += sum(...) requires a broadcast expression inside sum().")
+    end
     len_expr = shape.len
 
     idx = gensym(:i)
@@ -691,7 +987,7 @@ function _expand_for_annotations(stmts, param_specs, data_fields)
         else
             push!(output, s)
             if s.head == :(=) && s.args[1] isa Symbol
-                env[s.args[1]] = _infer_shape(s.args[2], env)
+                env[s.args[1]] = _infer_shape_permissive(s.args[2], env)
             end
         end
     end
@@ -758,6 +1054,33 @@ _div(a, b) = :(div($a, $b))
 # @skate macro — CPU codegen
 # ═══════════════════════════════════════════════════════════════════════════════
 
+"""Recursively check if an expression contains `target +=`."""
+function _contains_target_accum(ex)
+    ex isa Expr || return false
+    (ex.head == :(+=) && length(ex.args) >= 1 && ex.args[1] == :target) && return true
+    return any(_contains_target_accum, ex.args)
+end
+
+"""Warn if a statement is a bare lpdf call (result not accumulated into target)."""
+function _warn_bare_lpdf(ex, model_name)
+    ex isa Expr || return
+    # Direct bare call at statement level
+    if _is_bare_lpdf_call(ex)
+        fname = ex.args[1]
+        @warn("[@skate $model_name] Bare call to '$fname(...)' in @logjoint — " *
+              "return value is discarded. Did you mean 'target += $fname(...)'?")
+        return
+    end
+    # Recurse into blocks (but not into += which is valid)
+    if ex.head == :block
+        for a in ex.args
+            _warn_bare_lpdf(a, model_name)
+        end
+    elseif ex.head == :for && length(ex.args) >= 2
+        _warn_bare_lpdf(ex.args[2], model_name)
+    end
+end
+
 """
     @skate ModelName begin
         @constants begin ... end
@@ -780,19 +1103,41 @@ Define a Bayesian model. Generates:
 macro skate(model_name::Symbol, body::Expr)
     body.head == :block || error("@skate expects begin...end block")
     data_blk = params_blk = model_blk = nothing
+    found_blocks = Symbol[]
     for expr in body.args
         expr isa Expr && expr.head == :macrocall || continue
         sym = expr.args[1]
         blk = last(filter(a -> a isa Expr, expr.args))
 
-        sym == Symbol("@constants")     && (data_blk = blk)
-        sym == Symbol("@params")   && (params_blk = blk)
-        sym == Symbol("@logjoint") && (model_blk = blk)
+        if sym == Symbol("@constants")
+            data_blk = blk
+            push!(found_blocks, Symbol("@constants"))
+        elseif sym == Symbol("@data")
+            # Accept @data as alias for @constants
+            data_blk = blk
+            push!(found_blocks, Symbol("@data"))
+        elseif sym == Symbol("@params")
+            params_blk = blk
+            push!(found_blocks, Symbol("@params"))
+        elseif sym == Symbol("@logjoint")
+            model_blk = blk
+            push!(found_blocks, Symbol("@logjoint"))
+        elseif sym == Symbol("@model")
+            # Common mistake from Stan users
+            error("@skate: found '@model' — did you mean '@logjoint'?")
+        end
     end
 
-    data_blk !== nothing || error("Missing @constants block")
-    params_blk !== nothing || error("Missing @params block")
-    model_blk !== nothing || error("Missing @logjoint block")
+    missing = String[]
+    data_blk === nothing && push!(missing, "@constants")
+    params_blk === nothing && push!(missing, "@params")
+    model_blk === nothing && push!(missing, "@logjoint")
+    if !isempty(missing)
+        found_str = isempty(found_blocks) ? "none" : join(found_blocks, ", ")
+        error("@skate $model_name: missing block(s): $(join(missing, ", ")). " *
+              "Found: $found_str. " *
+              "A model requires @constants, @params, and @logjoint blocks.")
+    end
 
     data_fields, data_names = _parse_constants(data_blk)
     dn = Set(data_names)
@@ -1018,7 +1363,73 @@ macro skate(model_name::Symbol, body::Expr)
     end
 
     param_names = Set(s.name for s in param_specs)
-    raw_stmts = [_rewrite_data_refs(s, dn, param_names) for s in _lines(model_blk)]
+
+    # ── @logjoint body validation ─────────────────────────────────────────────
+
+    model_lines = _lines(model_blk)
+
+    # Check 1: warn if @logjoint has no target += statements
+    has_target_accum = any(model_lines) do s
+        s isa Expr || return false
+        (s.head == :(+=) && s.args[1] == :target) && return true
+        # Also check inside for loops
+        _contains_target_accum(s)
+    end
+    has_target_accum || @warn(
+        "[@skate $model_name] @logjoint body has no 'target +=' statements. " *
+        "The log-density will always be 0.0. Did you forget 'target +='?")
+
+    # Check 2: warn on bare lpdf calls (result discarded)
+    for s in model_lines
+        _warn_bare_lpdf(s, model_name)
+    end
+
+    # Check 3: check for undefined variable references
+    all_known = Set{Symbol}()
+    union!(all_known, dn)
+    union!(all_known, param_names)
+    union!(all_known, _KNOWN_LPDF_NAMES)
+    for s in [:target, :log_mix, :log, :exp, :log1p, :sqrt, :abs, :max, :min,
+              :clamp, :sum, :length, :size, :view, :nothing, :pi, :Inf, :NaN, :inv]
+        push!(all_known, s)
+    end
+    # Collect locally assigned variables in the body
+    local_assigns = Set{Symbol}()
+    _collect_assigns(model_lines, local_assigns)
+    union!(all_known, local_assigns)
+
+    refs = Set{Symbol}()
+    for s in model_lines
+        _collect_refs(s, refs)
+    end
+    # Filter to only symbols that look like user variables (not Julia builtins)
+    undefined = setdiff(refs, all_known)
+    # Remove numeric-looking or single-char iteration vars (i, j, k, etc. are fine in for loops)
+    filter!(s -> length(string(s)) > 1, undefined)
+    for undef_name in undefined
+        suggestion = _suggest_lpdf(undef_name)
+        if suggestion !== nothing
+            @warn("[@skate $model_name] Unknown function '$undef_name' in @logjoint. " *
+                  "Did you mean '$suggestion'?")
+        end
+    end
+
+    # Check 4: check for unknown lpdf-like function calls (typo detection)
+    call_names = Set{Symbol}()
+    for s in model_lines
+        _collect_call_names(s, call_names)
+    end
+    for name in call_names
+        sname = string(name)
+        if (endswith(sname, "_lpdf") || endswith(sname, "_lccdf") || endswith(sname, "_lcdf")) &&
+           name ∉ _KNOWN_LPDF_NAMES
+            suggestion = _suggest_lpdf(name)
+            hint = suggestion !== nothing ? " Did you mean '$suggestion'?" : ""
+            @warn("[@skate $model_name] Unknown density function '$name' in @logjoint.$hint")
+        end
+    end
+
+    raw_stmts = [_rewrite_data_refs(s, dn, param_names) for s in model_lines]
     expanded_stmts = _expand_for_annotations(raw_stmts, param_specs, data_fields)
     model_stmts = [_inline_log_mix(_auto_view(s)) for s in expanded_stmts]
 

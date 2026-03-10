@@ -9,6 +9,7 @@ mutable struct WelfordState
 end
 
 function welford_update!(state::WelfordState, x_k::AbstractVector{Float64})
+    length(x_k) == length(state.mean) || throw(ArgumentError("welford_update!: x_k length ($(length(x_k))) must match state dimension ($(length(state.mean)))"))
     state.n += 1
     
     @inbounds @simd for i in eachindex(x_k)

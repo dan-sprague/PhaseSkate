@@ -1,12 +1,15 @@
 using Documenter
+using DocumenterVitepress
 using PhaseSkate
 
 makedocs(
     sitename = "PhaseSkate",
     modules = [PhaseSkate],
-    format = Documenter.HTML(
-        prettyurls = get(ENV, "CI", nothing) == "true",
-        canonical = "https://YOUR_USERNAME.github.io/PhaseSkate.jl",
+    warnonly = true,
+    format = DocumenterVitepress.MarkdownVitepress(
+        repo = "github.com/dan-sprague/PhaseSkate",
+        devbranch = "main",
+        devurl = "dev",
     ),
     pages = [
         "Home" => "index.md",
@@ -18,6 +21,8 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/YOUR_USERNAME/PhaseSkate.jl.git",
+    repo = "github.com/dan-sprague/PhaseSkate.git",
+    target = "build",
     devbranch = "main",
+    push_preview = true,
 )

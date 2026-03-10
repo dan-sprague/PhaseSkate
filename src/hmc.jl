@@ -537,6 +537,9 @@ Run NUTS (No-U-Turn Sampler) on a compiled model. Returns a `Chains` object.
 - `δ`: Target acceptance probability for step size adaptation.
 """
 function sample(model, num_samples; ϵ = 0.1, max_depth = 10, warmup = 1000, ad = :auto, chains = 4, seed = nothing, δ = 0.8)
+    num_samples > 0 || throw(ArgumentError("sample: num_samples must be > 0, got $num_samples"))
+    warmup >= 0 || throw(ArgumentError("sample: warmup must be >= 0, got $warmup"))
+    chains > 0 || throw(ArgumentError("sample: chains must be > 0, got $chains"))
     ∇! = _make_grad(model; ad)
 
     # Generate per-chain RNGs for thread safety
