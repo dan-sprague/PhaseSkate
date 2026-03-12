@@ -1,5 +1,7 @@
 benchmarks/
-.*
+.claude
+.vscode
+
 # Julia
 Manifest.toml
 *.jl.cov
