@@ -31,7 +31,7 @@ Define a Bayesian model. Generates:
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lang.jl#L1145-L1163" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lang.jl#L1145-L1163" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -58,7 +58,7 @@ Fields:
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/safe_grads.jl#L1-L11" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/safe_grads.jl#L1-L11" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -75,7 +75,7 @@ log_prob(model, q) → Float64
 Evaluate the log-density of `model` at unconstrained parameter vector `q`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/safe_grads.jl#L18-L22" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/safe_grads.jl#L18-L22" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -116,7 +116,7 @@ Run NUTS (No-U-Turn Sampler) on a compiled model. Returns a `Chains` object.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/hmc.jl#L703-L719" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/hmc.jl#L703-L719" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -147,7 +147,7 @@ Chains(chain_results)
 Build a `Chains` object from the output of multi-chain sampling. `chain_results` is a `Vector` of per-chain sample vectors, where each sample is a `NamedTuple` of constrained parameter values. Single-chain input (a plain `Vector{<:NamedTuple}`) is wrapped automatically. `raw_chains` is a `Vector{Matrix{Float64}}` where each matrix is `(dim × nsamples)`, and `constrain` transforms an unconstrained vector into a `NamedTuple`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/chains.jl#L15-L24" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/chains.jl#L15-L24" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -164,7 +164,7 @@ samples(c::Chains, name::Symbol)
 Return raw samples for parameter `name`.   scalar  → (nsamples, nchains)   (K,)    → (nsamples, K, nchains)   (K,D)   → (nsamples, K, D, nchains)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/chains.jl#L70-L77" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/chains.jl#L70-L77" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -181,7 +181,7 @@ mean(c::Chains, name::Symbol)
 Posterior mean of parameter `name`, averaged over all samples and chains. Returns an array matching the parameter&#39;s original shape (or a scalar).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/chains.jl#L89-L94" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/chains.jl#L89-L94" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -198,7 +198,7 @@ ci(c::Chains, name::Symbol; level=0.95)
 Element-wise credible interval for parameter `name`, pooling all chains. Returns `(lower, upper)`, each matching the parameter&#39;s original shape.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/chains.jl#L107-L112" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/chains.jl#L107-L112" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -215,7 +215,7 @@ thin(c::Chains, M::Int) → Chains
 Thin a Chains object to M evenly-spaced draws per chain.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/chains.jl#L178-L182" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/chains.jl#L178-L182" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -232,7 +232,7 @@ min_ess(c::Chains) → Float64
 Minimum bulk ESS across all scalar parameter elements and chains.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/chains.jl#L138-L142" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/chains.jl#L138-L142" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -257,7 +257,7 @@ Posterior draws are thinned to M roughly independent samples using ESS-based thi
 Returns an `SBCResult` with rank statistics and chi-squared uniformity p-values.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/sbc.jl#L114-L127" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/sbc.jl#L114-L127" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -274,7 +274,7 @@ calibrated(result; alpha=0.01)
 Return `true` if all parameters pass the chi-squared uniformity test at level `alpha`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/sbc.jl#L194-L198" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/sbc.jl#L194-L198" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -346,7 +346,7 @@ Missing docstring for `corr_cholesky_transform`. Check Documenter&#39;s build lo
 Log-density of Normal(μ, σ) evaluated at x. Pure arithmetic — Enzyme-safe.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L145" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L145" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -427,7 +427,7 @@ weibull_logsigma_lccdf(x, α, log_σ)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L245-L247" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L245-L247" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -458,7 +458,7 @@ bernoulli_logit_lpdf(y, α)
 Stan-style Bernoulli log-density using the logit-link linear predictor α. α is typically (intercept + X * beta).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L217-L222" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L217-L222" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -481,7 +481,7 @@ neg_binomial_2_lpdf(y, μ, ϕ)
 Stan-style Negative Binomial log-density. μ: Mean ϕ: Dispersion (smaller ϕ = more variance/overdispersion)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L199-L205" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L199-L205" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -510,7 +510,7 @@ dirichlet_lpdf(x, K::Float64)
 Symmetric Dirichlet with concentration α. Equivalent to `dirichlet_lpdf(x, fill(α, length(x)))` but zero-allocation.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L368-L373" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L368-L373" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -535,7 +535,7 @@ multi_normal_cholesky_lpdf(x, μ, L)
 Stan-style log-density for MVN. L is the Lower-Triangular Cholesky factor of the covariance matrix.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L21-L26" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L21-L26" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -552,7 +552,7 @@ multi_normal_cholesky_scaled_lpdf(x, μ, log_sigma_row, L_corr)
 Fused MVN Cholesky log-density with log-scale parameterization. Equivalent to `multi_normal_cholesky_lpdf(x, μ, diag_pre_multiply(exp.(log_sigma), L_corr))` but computes `exp()` per-element inline — no broadcast allocation, no `diag_pre_multiply` temp.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L117-L123" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L117-L123" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -567,7 +567,7 @@ lkj_corr_cholesky_lpdf(L, η)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L307-L309" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L307-L309" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -579,7 +579,7 @@ lkj_corr_cholesky_lpdf(L, η)
 Construct the Cholesky factor of a covariance matrix from scales and correlation Cholesky. Equivalent to `Diagonal(sigma) * L_corr`, i.e. `sigma .* L_corr`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/lpdfs.jl#L113-L115" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/lpdfs.jl#L113-L115" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -598,7 +598,7 @@ log_sum_exp(x)
 The &#39;Bare Metal&#39; stability trick for Logit/Softmax math.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/utilities.jl#L2-L6" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/utilities.jl#L2-L6" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -617,7 +617,7 @@ Zero-allocation log-mixture-density (branchless). `f(j)` returns the log-density
 Usage with `do` syntax:     log_mix(theta) do j         normal_lpdf(x[i], mus[j], sigma)     end
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/utilities.jl#L17-L27" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/utilities.jl#L17-L27" target="_blank" rel="noreferrer">source</a></Badge>
 
 
 
@@ -628,13 +628,13 @@ log_mix(a, b)
 
 Log-sum-exp of elementwise `a .+ b`, zero-allocation. `a` and `b` are vectors of log-values (e.g. log-weights and log-likelihoods).
 
-```
+```julia
 log_mix(log_theta, log_phi) == log(sum(exp.(log_theta .+ log_phi)))
 ```
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/utilities.jl#L39-L46" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/utilities.jl#L39-L46" target="_blank" rel="noreferrer">source</a></Badge>
 
 
 
@@ -646,7 +646,7 @@ log_mix(a, b, offset)
 `log_sum_exp(a .+ offset .+ b)`, zero-allocation.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/727fa4fcbb781e297d69f1666778356b7168d164/src/utilities.jl#L58-L62" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/dan-sprague/PhaseSkate/blob/42d21922598b213fd5a3ca147e0ad073d14e33de/src/utilities.jl#L58-L62" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
