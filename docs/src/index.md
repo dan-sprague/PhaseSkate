@@ -5,7 +5,7 @@ layout: home
 hero:
   name: PhaseSkate
   text: High Performance Bayesian Inference In Julia
-  tagline: Fast sampling built for complex and high dimension models on CPUs.
+  tagline: Fast sampling built for complex models on your laptop.
   actions:
     - theme: brand
       text: Getting Started
@@ -242,9 +242,8 @@ hero:
 .ide-demo-card .ap-wrapper {
   width: 100% !important;
 }
+@import url('https://unpkg.com/asciinema-player@3.9.0/dist/bundle/asciinema-player.css');
 </style>
-
-<link rel="stylesheet" type="text/css" href="https://unpkg.com/asciinema-player@3.9.0/dist/bundle/asciinema-player.css" />
 
 <div class="vp-doc case-study showcase-toggle">
 
@@ -253,7 +252,7 @@ hero:
 
 <div class="showcase-bar">
   <label for="showcase-casestudy">Case Study</label>
-  <label for="showcase-ide">IDE Demo</label>
+  <label for="showcase-ide">PPL IDE</label>
 </div>
 
 <div class="showcase-panels">
@@ -351,24 +350,17 @@ end
 <div class="showcase-panel showcase-panel-ide">
 
 <h1 class="case-study-title">PhaseSkate IDE</h1>
-<p class="case-study-subtitle">A full terminal-based environment for Bayesian modeling &mdash; edit models, sample, and inspect diagnostics in real time.</p>
+<p class="case-study-subtitle">Watch a demonstration of the real-time streaming of posterior samples from the PhaseSkate Terminal User Interface (TUI).</p>
 
 <div class="ide-demo-card">
   <div id="ide-player"></div>
 </div>
 
-<script src="https://unpkg.com/asciinema-player@3.9.0/dist/bundle/asciinema-player.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  if (document.getElementById('ide-player') && !document.getElementById('ide-player').hasChildNodes()) {
-    AsciinemaPlayer.create(
-      '/PhaseSkate/dev/assets/demo.cast',
-      document.getElementById('ide-player'),
-      { autoPlay: true, loop: true, speed: 2, theme: 'monokai', fit: 'width', cols: 220, rows: 55 }
-    );
-  }
-});
-</script>
+<div
+  id="ide-player-loader"
+  data-cast="/PhaseSkate/dev/assets/demo.cast"
+  style="display:none;"
+></div>
 
 </div> <!-- end showcase-panel-ide -->
 
@@ -376,3 +368,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </div> <!-- end showcase-toggle -->
 ````
+
+<script setup>
+import { onMounted } from 'vue'
+
+onMounted(() => {
+  const el = document.getElementById('ide-player')
+  if (!el || el.hasChildNodes()) return
+
+  const script = document.createElement('script')
+  script.src = 'https://unpkg.com/asciinema-player@3.9.0/dist/bundle/asciinema-player.min.js'
+  script.onload = () => {
+    AsciinemaPlayer.create(
+      '/PhaseSkate/dev/assets/demo.cast',
+      el,
+      { autoPlay: true, loop: true, speed: 2, theme: 'monokai', fit: 'width', cols: 220, rows: 55 }
+    )
+  }
+  document.head.appendChild(script)
+})
+</script>
