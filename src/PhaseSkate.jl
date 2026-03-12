@@ -32,6 +32,7 @@ include("chains.jl")
 include("lang.jl")
 include("adjoints.jl")
 include("sbc.jl")
+# include("compile.jl")  # WIP — has syntax issues with $ in triple-quoted strings
 
 """
     app(; kwargs...)
@@ -50,10 +51,10 @@ Requires Tachikoma.jl to be loaded (`using Tachikoma`).
 """
 function dashboard end
 
-export app, dashboard,
+export app, dashboard, compile,
        @skate, make, sample, log_prob, ModelLogDensity,
        sbc, SBCResult, calibrated,
-       Chains, samples, mean, ci, thin, min_ess,
+       Chains, samples, mean, ci, thin, min_ess, diagnostics,
        cholesky,
        transform, log_abs_det_jacobian,
        IdentityConstraint, LowerBounded, UpperBounded, Bounded,

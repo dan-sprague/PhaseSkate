@@ -107,44 +107,57 @@ function EnzymeRules.reverse(config, ::Const{typeof(neg_binomial_2_lpdf)},
 end
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# weibull_logsigma_lpdf(x, α, log_σ)  — all Active
+# weibull_logsigma_lpdf(x, α, log_σ)  — multiple activity patterns
 # ═══════════════════════════════════════════════════════════════════════════════
 
-function EnzymeRules.augmented_primal(config, ::Const{typeof(weibull_logsigma_lpdf)},
-        ::Type{<:Active}, x::Active, α::Active, log_σ::Active)
-    xv = max(x.val, eps(Float64)); αv = max(α.val, eps(Float64)); ls = log_σ.val
-    log_x = log(xv); diff = log_x - ls
-    eterm = exp(αv * diff)
-    lp = log(αv) - ls + (αv - 1.0) * diff - eterm
-    return EnzymeRules.AugmentedReturn(lp, nothing, nothing)
-end
-function EnzymeRules.reverse(config, ::Const{typeof(weibull_logsigma_lpdf)},
-        dret::Active, tape, x::Active, α::Active, log_σ::Active)
-    xv = max(x.val, eps(Float64)); αv = max(α.val, eps(Float64)); ls = log_σ.val
-    diff = log(xv) - ls; eterm = exp(αv * diff)
-    dr = dret.val
-    return (dr * ((αv - 1.0) / xv - αv * eterm / xv),
-            dr * (1.0/αv + diff - diff * eterm),
-            dr * (-αv + αv * eterm))
+for (xT, αT, lsT) in [
+    (Active, Active, Active), (Const, Active, Active),
+    (Active, Const, Active), (Active, Active, Const)]
+
+    @eval function EnzymeRules.augmented_primal(config, ::Const{typeof(weibull_logsigma_lpdf)},
+            ::Type{<:Active}, x::$xT, α::$αT, log_σ::$lsT)
+        xv = max(x.val, eps(Float64)); αv = max(α.val, eps(Float64)); ls = log_σ.val
+        diff = log(xv) - ls; eterm = exp(αv * diff)
+        lp = log(αv) - ls + (αv - 1.0) * diff - eterm
+        return EnzymeRules.AugmentedReturn(lp, nothing, nothing)
+    end
+    @eval function EnzymeRules.reverse(config, ::Const{typeof(weibull_logsigma_lpdf)},
+            dret::Active, tape, x::$xT, α::$αT, log_σ::$lsT)
+        xv = max(x.val, eps(Float64)); αv = max(α.val, eps(Float64)); ls = log_σ.val
+        diff = log(xv) - ls; eterm = exp(αv * diff)
+        dr = dret.val
+        dx = $xT === Active ? dr * ((αv - 1.0) / xv - αv * eterm / xv) : nothing
+        dα = $αT === Active ? dr * (1.0/αv + diff - diff * eterm) : nothing
+        dls = $lsT === Active ? dr * (-αv + αv * eterm) : nothing
+        return (dx, dα, dls)
+    end
 end
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# weibull_logsigma_lccdf(x, α, log_σ)  — all Active
+# weibull_logsigma_lccdf(x, α, log_σ)  — multiple activity patterns
 # ═══════════════════════════════════════════════════════════════════════════════
 
-function EnzymeRules.augmented_primal(config, ::Const{typeof(weibull_logsigma_lccdf)},
-        ::Type{<:Active}, x::Active, α::Active, log_σ::Active)
-    xv = max(x.val, eps(Float64)); αv = max(α.val, eps(Float64)); ls = log_σ.val
-    diff = log(xv) - ls; eterm = exp(αv * diff)
-    lp = -eterm
-    return EnzymeRules.AugmentedReturn(lp, nothing, nothing)
-end
-function EnzymeRules.reverse(config, ::Const{typeof(weibull_logsigma_lccdf)},
-        dret::Active, tape, x::Active, α::Active, log_σ::Active)
-    xv = max(x.val, eps(Float64)); αv = max(α.val, eps(Float64)); ls = log_σ.val
-    diff = log(xv) - ls; eterm = exp(αv * diff)
-    dr = dret.val
-    return (dr * (-αv * eterm / xv), dr * (-diff * eterm), dr * (αv * eterm))
+for (xT, αT, lsT) in [
+    (Active, Active, Active), (Const, Active, Active),
+    (Active, Const, Active), (Active, Active, Const)]
+
+    @eval function EnzymeRules.augmented_primal(config, ::Const{typeof(weibull_logsigma_lccdf)},
+            ::Type{<:Active}, x::$xT, α::$αT, log_σ::$lsT)
+        xv = max(x.val, eps(Float64)); αv = max(α.val, eps(Float64)); ls = log_σ.val
+        diff = log(xv) - ls; eterm = exp(αv * diff)
+        lp = -eterm
+        return EnzymeRules.AugmentedReturn(lp, nothing, nothing)
+    end
+    @eval function EnzymeRules.reverse(config, ::Const{typeof(weibull_logsigma_lccdf)},
+            dret::Active, tape, x::$xT, α::$αT, log_σ::$lsT)
+        xv = max(x.val, eps(Float64)); αv = max(α.val, eps(Float64)); ls = log_σ.val
+        diff = log(xv) - ls; eterm = exp(αv * diff)
+        dr = dret.val
+        dx = $xT === Active ? dr * (-αv * eterm / xv) : nothing
+        dα = $αT === Active ? dr * (-diff * eterm) : nothing
+        dls = $lsT === Active ? dr * (αv * eterm) : nothing
+        return (dx, dα, dls)
+    end
 end
 
 # ═══════════════════════════════════════════════════════════════════════════════

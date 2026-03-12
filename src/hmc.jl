@@ -230,6 +230,7 @@ struct TreeScratch
     ρ_final::Vector{Float64}
     p_init_end::Vector{Float64}
     p_final_beg::Vector{Float64}
+    ρ_check::Vector{Float64}        # scratch for augmented U-turn checks
     z_propose_final::PhaseSpacePoint
     log_sum_weight_init::Ref{Float64}
     log_sum_weight_final::Ref{Float64}
@@ -254,7 +255,7 @@ end
 
 function TreeScratch(dim::Int)
     TreeScratch(
-        zeros(dim), zeros(dim), zeros(dim), zeros(dim),
+        zeros(dim), zeros(dim), zeros(dim), zeros(dim), zeros(dim),
         PhaseSpacePoint(zeros(dim), zeros(dim), zeros(dim), 0.0),
         Ref(-Inf), Ref(-Inf)
     )
@@ -333,16 +334,29 @@ function build_tree!(rng, z::PhaseSpacePoint, z_propose::PhaseSpacePoint,
             z_propose.V = scr.z_propose_final.V
         end
 
-        # Sub-tree u-turn checks (before combining clobbers ρ_init)
-        valid_init_uturn = check_uturn(scr.ρ_init, p_beg, scr.p_init_end, inv_metric)
-        valid_final_uturn = check_uturn(scr.ρ_final, scr.p_final_beg, p_end, inv_metric)
-
-        # Combine momentum sums — reuse ρ_init for the combined sum
-        scr.ρ_init .+= scr.ρ_final
+        # Combine momentum sums
+        scr.ρ_init .+= scr.ρ_final  # ρ_init now holds ρ_combined
         ρ .+= scr.ρ_init
 
-        return check_uturn(scr.ρ_init, p_beg, p_end, inv_metric) &&
-               valid_init_uturn && valid_final_uturn
+        # Stan-style augmented U-turn checks (Betancourt 2017):
+        # Check 1: full combined trajectory
+        persist = check_uturn(scr.ρ_init, p_beg, p_end, inv_metric)
+
+        # Check 2: init subtree augmented with boundary momentum from final
+        # ρ_check = ρ_init_original + p_final_beg = (ρ_combined - ρ_final) + p_final_beg
+        @inbounds @simd for i in eachindex(scr.ρ_check)
+            scr.ρ_check[i] = scr.ρ_init[i] - scr.ρ_final[i] + scr.p_final_beg[i]
+        end
+        persist &= check_uturn(scr.ρ_check, p_beg, scr.p_final_beg, inv_metric)
+
+        # Check 3: final subtree augmented with boundary momentum from init
+        # ρ_check = ρ_final + p_init_end
+        @inbounds @simd for i in eachindex(scr.ρ_check)
+            scr.ρ_check[i] = scr.ρ_final[i] + scr.p_init_end[i]
+        end
+        persist &= check_uturn(scr.ρ_check, scr.p_init_end, p_end, inv_metric)
+
+        return persist
     end
 end
 

@@ -133,7 +133,7 @@ function ci(c::Chains, name::Symbol; level::Float64=0.95)
     end
 end
 
-## ── Thinning ──────────────────────────────────────────────────────────────────
+## ── Diagnostics accessors ────────────────────────────────────────────────────
 
 """
     min_ess(c::Chains) → Float64
@@ -145,10 +145,34 @@ function min_ess(c::Chains)
     for p in c.params
         for col in p.cols
             x = @view c.data[:, col, :]
-            ess_min = min(ess_min, _ess(x))
+            _, essb, _ = _col_diagnostics(x)
+            ess_min = min(ess_min, essb)
         end
     end
     return ess_min
+end
+
+"""
+    diagnostics(c::Chains) → (names, rhat, ess_bulk, ess_tail)
+
+Per-element diagnostic vectors: parameter labels, R̂, bulk ESS, tail ESS.
+"""
+function diagnostics(c::Chains)
+    labels = String[]
+    rhat_vec = Float64[]
+    essb_vec = Float64[]
+    esst_vec = Float64[]
+    for p in c.params
+        for (k, col) in enumerate(p.cols)
+            x = @view c.data[:, col, :]
+            rhat, essb, esst = _col_diagnostics(x)
+            push!(labels, _elem_label(p.name, p.shape, k))
+            push!(rhat_vec, rhat)
+            push!(essb_vec, essb)
+            push!(esst_vec, esst)
+        end
+    end
+    return (names=labels, rhat=rhat_vec, ess_bulk=essb_vec, ess_tail=esst_vec)
 end
 
 """
@@ -219,107 +243,162 @@ end
 """
     _ess(x::AbstractMatrix{Float64}) → Float64
 
-Effective sample size via Geyer's initial positive sequence estimator.
-Computes autocovariance with demeaned chains + `@inbounds @simd`.
+Effective sample size via Geyer's initial positive sequence estimator
+with monotone truncation. Matches stan/analyze/mcmc/ess.hpp exactly:
+biased (1/N) autocovariance, paired rho starting at lag 0,
+monotone sequence enforcement, and `1/log10(N*M)` safety floor.
 """
 function _ess(x::AbstractMatrix{Float64})
     n, m = size(x)
-    nhalf = n ÷ 2
-    nhalf < 2 && return Float64(n * m)
+    n < 4 && return Float64(n * m)
 
-    # W and var_hat (needed for ρ̂_t formula)
-    W = 0.0
-    overall = 0.0
+    # Per-chain biased autocovariance (1/n normalization, matching Stan/Geyer 1992)
+    # and within-chain variance (Bessel-corrected)
+    inv_n = 1.0 / n
     chain_means = Vector{Float64}(undef, m)
+    chain_var = Vector{Float64}(undef, m)
+
+    # Demean into contiguous buffer
+    xc = Matrix{Float64}(undef, n, m)
     @inbounds for j in 1:m
         s = 0.0
         @simd for i in 1:n
             s += x[i, j]
         end
-        μ = s / n
+        μ = s * inv_n
         chain_means[j] = μ
-        overall += μ
-        v = 0.0
-        @simd for i in 1:n
-            v += (x[i, j] - μ) * (x[i, j] - μ)
-        end
-        W += v / (n - 1)
-    end
-    W /= m
-    overall /= m
-    B_over_n = 0.0
-    @inbounds @simd for j in 1:m
-        δ = chain_means[j] - overall; B_over_n += δ * δ
-    end
-    B_over_n /= (m - 1)     # = B/n  (since B = n * var(chain_means))
-    var_hat = (n - 1.0) / n * W + B_over_n
-    var_hat <= 0.0 && return Float64(n * m)
-
-    # autocovariance (averaged across chains) on demeaned data
-    max_lag = n - 3
-    max_lag < 1 && return Float64(n * m)
-
-    # demean each chain in a contiguous buffer for cache-friendly access
-    xc = Matrix{Float64}(undef, n, m)
-    @inbounds for j in 1:m
-        μ = chain_means[j]
         @simd for i in 1:n
             xc[i, j] = x[i, j] - μ
         end
+        # biased variance * n/(n-1) = unbiased variance
+        v = 0.0
+        @simd for i in 1:n
+            v += xc[i, j] * xc[i, j]
+        end
+        chain_var[j] = v * inv_n * (n / (n - 1.0))
     end
 
-    # Geyer's initial positive sequence — compute ρ̂ pairs on the fly
-    # avoiding a full autocovariance array
-    inv_n = 1.0 / n
-    τ = 1.0
-    t = 1
+    W = 0.0
+    @inbounds @simd for j in 1:m
+        W += chain_var[j]
+    end
+    W /= m
+
+    # var_plus = W*(n-1)/n + B  where B = var(chain_means)
+    var_plus = if m > 1
+        overall = 0.0
+        @inbounds @simd for j in 1:m
+            overall += chain_means[j]
+        end
+        overall /= m
+        B = 0.0
+        @inbounds @simd for j in 1:m
+            δ = chain_means[j] - overall; B += δ * δ
+        end
+        B /= (m - 1)
+        W * (n - 1.0) / n + B
+    else
+        W  # single chain: no between-chain term
+    end
+    var_plus <= 0.0 && return Float64(n * m)
+
+    # Geyer's initial positive sequence with monotone truncation
+    # Starts at lag 0, processes pairs (0,1), (2,3), (4,5), ...
+    # τ = -1 + 2 * Σ ρ̂_t  (including ρ̂_0)
+    max_lag = n - 3
+    max_lag < 1 && return Float64(n * m)
+
+    τ = -1.0
+    prev_pair_sum = Inf
+    t = 0
     while t < max_lag
-        # compute average autocovariance at lags t and t+1 across chains
-        acov_t  = 0.0
+        # Mean biased autocovariance at lag t across chains
+        acov_t = 0.0
+        len_t = n - t
+        @inbounds for j in 1:m
+            s = 0.0
+            @simd for i in 1:len_t
+                s += xc[i, j] * xc[i + t, j]
+            end
+            acov_t += s * inv_n
+        end
+        acov_t /= m
+        ρ_t = 1.0 - (W - acov_t) / var_plus
+
+        if t + 1 >= n
+            τ += 2.0 * ρ_t
+            break
+        end
+
         acov_t1 = 0.0
-        len_t  = n - t
         len_t1 = n - t - 1
         @inbounds for j in 1:m
-            s0 = 0.0
-            @simd for i in 1:len_t
-                s0 += xc[i, j] * xc[i + t, j]
-            end
-            s1 = 0.0
+            s = 0.0
             @simd for i in 1:len_t1
-                s1 += xc[i, j] * xc[i + t + 1, j]
+                s += xc[i, j] * xc[i + t + 1, j]
             end
-            acov_t  += s0 * inv_n
-            acov_t1 += s1 * inv_n
+            acov_t1 += s * inv_n
         end
-        ρ_t  = 1.0 - (W - acov_t)  / var_hat
-        ρ_t1 = 1.0 - (W - acov_t1) / var_hat
+        acov_t1 /= m
+        ρ_t1 = 1.0 - (W - acov_t1) / var_plus
+
         pair = ρ_t + ρ_t1
         pair < 0.0 && break
-        τ += 2.0 * pair
+
+        # Monotone sequence: enforce pair_sum ≤ prev_pair_sum
+        if pair > prev_pair_sum
+            ρ_t  = prev_pair_sum / 2.0
+            ρ_t1 = prev_pair_sum / 2.0
+            pair = prev_pair_sum
+        end
+        prev_pair_sum = pair
+
+        τ += 2.0 * (ρ_t + ρ_t1)
         t += 2
     end
 
-    τ = max(τ, 1.0 / (n * m))
-    return n * m / τ
+    # Safety floor (matching Stan)
+    total = Float64(n * m)
+    floor_val = 1.0 / log10(total)
+    τ = max(τ, floor_val)
+
+    return total / τ
 end
 
 """
     _rank_normalize(x::AbstractMatrix{Float64})
 
 Replace values with rank-based normal scores (pooled across chains).
-Single sortperm + O(N) rank assignment.
+Matches Stan: average ranks for ties, Blom fractional offset `(r - 0.375)/(N + 0.25)`.
 """
 function _rank_normalize(x::AbstractMatrix{Float64})
     n, m = size(x)
     N = n * m
     pooled = vec(x)
     order = sortperm(pooled)
-    z = Vector{Float64}(undef, N)
+
+    # Assign ranks with averaging for ties (matching Stan)
+    ranks = Vector{Float64}(undef, N)
+    k = 1
+    @inbounds while k <= N
+        k_start = k
+        while k < N && pooled[order[k + 1]] == pooled[order[k]]
+            k += 1
+        end
+        avg_rank = 0.5 * (k_start + k)  # 1-based average rank
+        for t in k_start:k
+            ranks[order[t]] = avg_rank
+        end
+        k += 1
+    end
+
+    # Inverse normal CDF via Blom offset
     inv_denom = 1.0 / (N + 0.25)
     sqrt2 = sqrt(2.0)
+    z = Vector{Float64}(undef, N)
     @inbounds for i in 1:N
-        p = (i - 0.375) * inv_denom
-        z[order[i]] = sqrt2 * erfinv(2.0 * p - 1.0)
+        p = (ranks[i] - 0.375) * inv_denom
+        z[i] = sqrt2 * erfinv(2.0 * p - 1.0)
     end
     return reshape(z, n, m)
 end
@@ -327,25 +406,58 @@ end
 ## ── Per-column diagnostics (all three in one call) ──────────────────────────
 
 """
+    _split_chains(x::AbstractMatrix{Float64}) → Matrix{Float64}
+
+Split each chain in half → (n÷2, 2m) matrix. Matching Stan: odd middle
+draw discarded. Second half starts at `(n+1)÷2 + 1` (1-based).
+"""
+function _split_chains(x::AbstractMatrix{Float64})
+    n, m = size(x)
+    nhalf = n ÷ 2
+    start2 = (n + 1) ÷ 2 + 1  # 1-based start of second half
+
+    split = Matrix{Float64}(undef, nhalf, 2m)
+    @inbounds for j in 1:m
+        @simd for i in 1:nhalf
+            split[i, 2j - 1] = x[i, j]
+            split[i, 2j]     = x[start2 + i - 1, j]
+        end
+    end
+    return split
+end
+
+"""
     _col_diagnostics(x::AbstractMatrix{Float64}) → (rhat, ess_bulk, ess_tail)
+
+Matches Stan's `split_rank_normalized_ess`: splits chains, then computes
+bulk ESS on rank-normalized data and tail ESS on indicator variables.
 """
 function _col_diagnostics(x::AbstractMatrix{Float64})
+    n, m = size(x)
     rhat = _split_rhat(x)
 
-    # ESS bulk: on rank-normalized samples
-    essb = _ess(_rank_normalize(x))
+    # Need at least 4 draws per chain to split meaningfully
+    if n < 4
+        return (rhat, Float64(n * m), Float64(n * m))
+    end
 
-    # ESS tail: on lower/upper 5% indicators
-    pooled = vec(x)
+    # Split chains into halves (matching Stan)
+    split = _split_chains(x)
+
+    # ESS bulk: rank-normalize the split chains, then compute ESS
+    essb = _ess(_rank_normalize(split))
+
+    # ESS tail: indicator variables at 5th/95th percentiles of split chains
+    pooled = vec(split)
     q05 = quantile(pooled, 0.05)
     q95 = quantile(pooled, 0.95)
-    n, m = size(x)
-    lo = Matrix{Float64}(undef, n, m)
-    hi = Matrix{Float64}(undef, n, m)
-    @inbounds for j in 1:m
-        @simd for i in 1:n
-            lo[i, j] = ifelse(x[i, j] <= q05, 1.0, 0.0)
-            hi[i, j] = ifelse(x[i, j] >= q95, 1.0, 0.0)
+    ns, ms = size(split)
+    lo = Matrix{Float64}(undef, ns, ms)
+    hi = Matrix{Float64}(undef, ns, ms)
+    @inbounds for j in 1:ms
+        @simd for i in 1:ns
+            lo[i, j] = ifelse(split[i, j] <= q05, 1.0, 0.0)
+            hi[i, j] = ifelse(split[i, j] >= q95, 1.0, 0.0)
         end
     end
     esst = min(_ess(lo), _ess(hi))
