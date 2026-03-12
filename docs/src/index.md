@@ -186,9 +186,79 @@ hero:
   width: 100%;
   height: auto;
 }
+
+/* ── Top-level showcase tabs ────────────────────────────── */
+.showcase-toggle input[type="radio"] { display: none; }
+
+.showcase-bar {
+  display: inline-flex;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+.showcase-bar label {
+  padding: 0.55rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--vp-c-text-2);
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+.showcase-bar label:not(:last-child) {
+  border-right: 1px solid var(--vp-c-divider);
+}
+#showcase-casestudy:checked ~ .showcase-bar label[for="showcase-casestudy"],
+#showcase-ide:checked ~ .showcase-bar label[for="showcase-ide"] {
+  background: var(--vp-c-brand);
+  color: #fff;
+}
+.dark #showcase-casestudy:checked ~ .showcase-bar label[for="showcase-casestudy"],
+.dark #showcase-ide:checked ~ .showcase-bar label[for="showcase-ide"] {
+  background: var(--vp-dark-green);
+  color: #fff;
+}
+
+.showcase-panels {
+  display: grid;
+}
+.showcase-panels > .showcase-panel {
+  grid-column: 1;
+  grid-row: 1;
+  visibility: hidden;
+}
+#showcase-casestudy:checked ~ .showcase-panels > .showcase-panel-casestudy { visibility: visible; }
+#showcase-ide:checked ~ .showcase-panels > .showcase-panel-ide { visibility: visible; }
+
+/* ── Asciinema player styling ───────────────────────────── */
+.ide-demo-card {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--vp-c-divider);
+  background: #1b1b1f;
+}
+.ide-demo-card .ap-wrapper {
+  width: 100% !important;
+}
 </style>
 
-<div class="vp-doc case-study">
+<link rel="stylesheet" type="text/css" href="https://unpkg.com/asciinema-player@3.9.0/dist/bundle/asciinema-player.css" />
+
+<div class="vp-doc case-study showcase-toggle">
+
+<input type="radio" name="showcase" id="showcase-casestudy" checked />
+<input type="radio" name="showcase" id="showcase-ide" />
+
+<div class="showcase-bar">
+  <label for="showcase-casestudy">Case Study</label>
+  <label for="showcase-ide">IDE Demo</label>
+</div>
+
+<div class="showcase-panels">
+
+<div class="showcase-panel showcase-panel-casestudy">
 
 <h1 class="case-study-title">Case Study: Multi-site Hierarchical Survival Model</h1>
 <p class="case-study-subtitle">Sample a complex, hierarchical survival model with thousands of observations in approximately a minute with Enzyme powered dense mass matrix NUTS sampling.</p>
@@ -276,7 +346,33 @@ end
   </div>
 </div>
 
+</div> <!-- end showcase-panel-casestudy -->
+
+<div class="showcase-panel showcase-panel-ide">
+
+<h1 class="case-study-title">PhaseSkate IDE</h1>
+<p class="case-study-subtitle">A full terminal-based environment for Bayesian modeling &mdash; edit models, sample, and inspect diagnostics in real time.</p>
+
+<div class="ide-demo-card">
+  <div id="ide-player"></div>
 </div>
 
-</div>
+<script src="https://unpkg.com/asciinema-player@3.9.0/dist/bundle/asciinema-player.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  if (document.getElementById('ide-player') && !document.getElementById('ide-player').hasChildNodes()) {
+    AsciinemaPlayer.create(
+      '/PhaseSkate/dev/assets/demo.cast',
+      document.getElementById('ide-player'),
+      { autoPlay: true, loop: true, speed: 2, theme: 'monokai', fit: 'width', cols: 220, rows: 55 }
+    );
+  }
+});
+</script>
+
+</div> <!-- end showcase-panel-ide -->
+
+</div> <!-- end showcase-panels -->
+
+</div> <!-- end showcase-toggle -->
 ````
