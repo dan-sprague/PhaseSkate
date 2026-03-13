@@ -18,237 +18,10 @@ hero:
 ```
 
 ````@raw html
-<style>
-/* ── Widen VitePress layout ────────────────────────────────── */
-:root { --vp-layout-max-width: 1800px; }
-
-/* ── Hero layout ───────────────────────────────────────────── */
-.VPHome .VPHero .image { display: none; }
-
-/* ── Hero + Case Study side by side on wide screens ────────── */
-.VPHome {
-  display: grid !important;
-  grid-template-columns: 1fr;
-  max-width: 1800px;
-  margin: 0 auto;
-  padding: 0 24px;
-}
-@media (min-width: 1200px) {
-  .VPHome {
-    grid-template-columns: auto 1fr;
-    align-items: start;
-    gap: 2rem;
-  }
-  .VPHome > .VPHero {
-    grid-column: 1;
-    grid-row: 1;
-    max-width: 480px;
-    position: sticky;
-    top: calc(var(--vp-nav-height) + 1rem);
-  }
-  /* raw HTML slot — may have extra wrapper divs */
-  .VPHome > .vp-doc,
-  .VPHome > div:last-child {
-    grid-column: 2;
-    grid-row: 1;
-  }
-}
-
-/* ── Case study section ────────────────────────────────────── */
-.case-study {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  padding: 2.5rem 3rem 2.5rem;
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 16px;
-}
-.case-study-title {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--vp-c-text-1);
-  margin: 0 0 0.5rem 0;
-  line-height: 1.2;
-}
-.case-study-subtitle {
-  font-size: 1rem;
-  color: var(--vp-c-text-2);
-  line-height: 1.6;
-  margin: 0 0 2rem 0;
-  max-width: 70ch;
-}
-
-/* ── Model summary table ─────────────────────────────────── */
-.model-summary {
-  border-collapse: collapse;
-  font-size: 0.9rem;
-  margin-bottom: 1.5rem;
-  color: var(--vp-c-text-1);
-  width: auto;
-}
-.model-summary th,
-.model-summary td {
-  padding: 0.4rem 1.2rem;
-  border: 1px solid var(--vp-c-divider);
-  text-align: left;
-}
-.model-summary th {
-  background: var(--vp-c-bg-soft);
-  font-weight: 600;
-}
-
-/* ── Stacked: plot on top, toggle below ───────────────────── */
-.case-study-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-/* ── Toggle switch ───────────────────────────────────────── */
-.model-toggle input[type="radio"] { display: none; }
-
-.toggle-bar {
-  display: inline-flex;
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 1.2rem;
-}
-.toggle-bar label {
-  padding: 0.45rem 1.2rem;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  color: var(--vp-c-text-2);
-  transition: background 0.15s, color 0.15s;
-  user-select: none;
-}
-.toggle-bar label:not(:last-child) {
-  border-right: 1px solid var(--vp-c-divider);
-}
-#toggle-desc:checked ~ .toggle-bar label[for="toggle-desc"],
-#toggle-code:checked ~ .toggle-bar label[for="toggle-code"] {
-  background: var(--vp-c-brand);
-  color: #fff;
-}
-.dark #toggle-desc:checked ~ .toggle-bar label[for="toggle-desc"],
-.dark #toggle-code:checked ~ .toggle-bar label[for="toggle-code"] {
-  background: var(--vp-dark-green);
-  color: #fff;
-}
-
-/* ── Toggle content visibility ───────────────────────────── */
-#toggle-desc:checked ~ .panels-wrapper > .panel-desc { visibility: visible; }
-#toggle-code:checked ~ .panels-wrapper > .panel-code { visibility: visible; }
-
-/* ── Keep toggle panels same size (overlay so height doesn't jump on toggle) */
-.model-toggle {
-  min-width: 0;
-  position: relative;
-}
-.panels-wrapper {
-  display: grid;
-}
-.panels-wrapper > .panel-desc,
-.panels-wrapper > .panel-code {
-  grid-column: 1;
-  grid-row: 1;
-  visibility: hidden;
-}
-
-/* ── Bullet list styling ─────────────────────────────────── */
-.model-toggle .panel-desc ul {
-  padding-left: 1.25rem;
-  line-height: 1.75;
-}
-.model-toggle .panel-desc li {
-  margin-bottom: 0.4rem;
-}
-
-/* ── Code panel font ─────────────────────────────────────── */
-.model-toggle .panel-code pre,
-.model-toggle .panel-code code {
-  font-size: 0.75rem !important;
-  line-height: 1.5 !important;
-}
-
-/* ── Plot card ───────────────────────────────────────────── */
-.plot-card {
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  background: #1b1b1f;
-}
-.plot-card img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-/* ── Top-level showcase tabs ────────────────────────────── */
-.showcase-toggle input[type="radio"] { display: none; }
-
-.showcase-bar {
-  display: inline-flex;
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 10px;
-  overflow: hidden;
-  margin-bottom: 1.5rem;
-}
-.showcase-bar label {
-  padding: 0.55rem 1.5rem;
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  color: var(--vp-c-text-2);
-  transition: background 0.15s, color 0.15s;
-  user-select: none;
-}
-.showcase-bar label:not(:last-child) {
-  border-right: 1px solid var(--vp-c-divider);
-}
-#showcase-casestudy:checked ~ .showcase-bar label[for="showcase-casestudy"],
-#showcase-ide:checked ~ .showcase-bar label[for="showcase-ide"] {
-  background: var(--vp-c-brand);
-  color: #fff;
-}
-.dark #showcase-casestudy:checked ~ .showcase-bar label[for="showcase-casestudy"],
-.dark #showcase-ide:checked ~ .showcase-bar label[for="showcase-ide"] {
-  background: var(--vp-dark-green);
-  color: #fff;
-}
-
-.showcase-panels {
-  display: grid;
-}
-.showcase-panels > .showcase-panel {
-  grid-column: 1;
-  grid-row: 1;
-  visibility: hidden;
-}
-#showcase-casestudy:checked ~ .showcase-panels > .showcase-panel-casestudy { visibility: visible; }
-#showcase-ide:checked ~ .showcase-panels > .showcase-panel-ide { visibility: visible; }
-
-/* ── Asciinema player styling ───────────────────────────── */
-.ide-demo-card {
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  background: #1b1b1f;
-}
-.ide-demo-card .ap-wrapper {
-  width: 100% !important;
-}
-@import url('https://unpkg.com/asciinema-player@3.9.0/dist/bundle/asciinema-player.css');
-</style>
-
 <div class="vp-doc case-study showcase-toggle">
 
-<input type="radio" name="showcase" id="showcase-casestudy" checked />
-<input type="radio" name="showcase" id="showcase-ide" />
+<input type="radio" name="showcase" id="showcase-casestudy" checked>
+<input type="radio" name="showcase" id="showcase-ide">
 
 <div class="showcase-bar">
   <label for="showcase-casestudy">Case Study</label>
@@ -275,8 +48,8 @@ hero:
 </div>
 
 <div class="model-toggle">
-  <input type="radio" name="model-view" id="toggle-desc" checked />
-  <input type="radio" name="model-view" id="toggle-code" />
+  <input type="radio" name="model-view" id="toggle-desc" checked>
+  <input type="radio" name="model-view" id="toggle-code">
 
   <div class="toggle-bar">
     <label for="toggle-desc">Description</label>
@@ -345,6 +118,8 @@ end
   </div>
 </div>
 
+</div> <!-- end case-study-grid -->
+
 </div> <!-- end showcase-panel-casestudy -->
 
 <div class="showcase-panel showcase-panel-ide">
@@ -367,7 +142,6 @@ end
 </div> <!-- end showcase-panels -->
 
 </div> <!-- end showcase-toggle -->
-````
 
 <script setup>
 import { onMounted } from 'vue'
@@ -388,3 +162,4 @@ onMounted(() => {
   document.head.appendChild(script)
 })
 </script>
+````
