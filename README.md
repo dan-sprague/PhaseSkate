@@ -29,7 +29,6 @@ Additionally, I have often wished I could track sampling progress for complex mo
             log_eff_scale_2 = log_scale .- ((tier2_X * beta_s) .+ mu_country_s[tier2_country_ids] ...
         end
 ```
-4. Auto @view: Maybe could be annoying, but the DSL is currently setup so that `arr[idx,:]` operations automatically have `@view` applied.
 
 ## Installation
 
