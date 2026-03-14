@@ -8,21 +8,17 @@ Built for [Enzyme](https://github.com/EnzymeAD/Enzyme.jl).
 
 ## Why PhaseSkate?
 
-I built this package to answer a question that has been bothering me: *What is the best way to generate very efficient logjoint functions in a way that will play nice with Enzyme AD?*
+PhaseSkate started off more as a pretty simple question, really. Given a performant logpdf function, how fast can Julia + Enzyme AD NUTS draw posterior samples? 
 
-HMC is intensive, CPU-bound numerical computation of complex gradients — at its heart a physics simulation of a particle skating around phase space. This is Julia's home turf.
+Things spiraled when I decided Enzyme had to be able to do static analysis of the gradient on an arbtitrary *lpdf* at compile time, ie no `set_runtime_analysis`. This meant that my logpdf could not be passed through any generic interfaces, which essentially led to the package you see now. In practice, this means that PhaseSkate has its own implementation of Stan's NUTS algorithm, as well as its own implementation of `lpdf` functions, which in the examples you will see are called in the style of Stan. What I have found, and what I hope you find, is that this was worth the price. PhaseSkate demonstrates very high ESS/sec sampling on complex models when using a dense mass matrix, surely attributable to Enzyme's amazing LLVM gradient compilation. :)
 
-**Design principles:**
-
-1. **Speed** — Pure log-density and jacobian functions designed to feed efficient code into Enzyme AD.
-2. **Clarity** — The `@skate` DSL defines constants, parameters, and the log-joint in a single cohesive block. No scattered model definitions.
-3. **No tildes** — `target += normal_lpdf(x, mu, sigma)` makes the log-joint accumulation explicit. Fast code = non-allocating code.
+Additionally, I have often wished I could track sampling progress for complex models in real time. `PhaseSkate` includes callback functions using a `Channel` during sampling. This then enabled a really neat TUI to be build using the recently published `Tachikoma.jl` package that shows live chain statistics and diagnostics, as well as live traces and histograms of the chains once warmup is exited.
 
 **Features**
 
-1. A Stan-like DSL, with some changes.
-2. Stan-like LKJ and Cholesky factorization for covariance matrices (or whatever) and out-of-the-box NegBin(mu,disp) parameterization, sometimes called "NegBin2".
-3. `@for` - keep readable broadcast math that gets rewritten under the hood as a direct accumulator into `target`. Allows you to accumulate multiple things sharing a common axis of iteration in a single for loop while keeping things legible :).
+1. Built for Enzyme and Enzyme only. lpdfs are implemented as pure, numerical functions with no external dependencies. Includes a `@for` for use inside the logjoint, allows you to keep readable broadcast math that gets rewritten under the hood as a direct accumulator into `target`. Allows you to accumulate multiple things sharing a common axis of iteration in a single for loop while keeping things legible :).
+2. Live chain traces and diagnostics in a `Tachikoma.jl` powered TUI!
+3. Aims to be good at HMC -- no discrete sampling! See examples and tutorials for how to sample models with discrete variables.
 ```julia
 @for target += begin
             log_k_2 = mu_k .+ (tier2_X * beta_k) .+ mu_country_k[tier2_country_ids] .+ (omega_k .* z_k)
