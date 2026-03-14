@@ -13,6 +13,10 @@ sidebar: false
   <p class="ps-hero-text">Bayesian Inference In Julia</p>
   <p class="ps-hero-tagline">Fast sampling built for complex models on your laptop.</p>
 
+  <div class="ps-hero-highlight">
+    All log-PDF functions are implemented as pure arithmetic (no foreign library calls) to remain fully differentiable by Enzyme.
+  </div>
+
   <div class="ps-hero-actions">
     <a class="ps-btn ps-btn-brand" href="/getting_started">Getting Started</a>
     <a class="ps-btn ps-btn-alt" href="/api">API Reference</a>
@@ -55,11 +59,22 @@ sidebar: false
 <input type="radio" name="showcase" id="showcase-ide" checked>
 
 <div class="showcase-bar">
-  <label for="showcase-casestudy">Case Study</label>
   <label for="showcase-ide">Real-Time Interface</label>
+  <label for="showcase-casestudy">Case Study</label>
 </div>
 
 <div class="showcase-panels">
+
+<div class="showcase-panel showcase-panel-ide">
+
+<h1 class="case-study-title">PhaseSkate IDE</h1>
+<p class="case-study-subtitle">A 1,000-group hierarchical normal model (the classic "Eight Schools" structure scaled up with random data) sampled live in the PhaseSkate TUI.</p>
+
+<div class="ide-demo-card">
+  <div id="ide-player"></div>
+</div>
+
+</div> <!-- end showcase-panel-ide -->
 
 <div class="showcase-panel showcase-panel-casestudy">
 
@@ -153,17 +168,6 @@ end
 
 </div> <!-- end showcase-panel-casestudy -->
 
-<div class="showcase-panel showcase-panel-ide">
-
-<h1 class="case-study-title">PhaseSkate IDE</h1>
-<p class="case-study-subtitle">Watch a demonstration of the real-time streaming of posterior samples from the PhaseSkate Terminal User Interface (TUI).</p>
-
-<div class="ide-demo-card">
-  <div id="ide-player"></div>
-</div>
-
-</div> <!-- end showcase-panel-ide -->
-
 </div> <!-- end showcase-panels -->
 
 </div> <!-- end ps-showcase -->
@@ -172,8 +176,14 @@ end
 
 <script setup>
 import { onMounted } from 'vue'
+import { withBase } from 'vitepress'
 
 onMounted(() => {
+  // Fix internal links for production base path
+  document.querySelectorAll('.ps-home a[href^="/"]').forEach(a => {
+    a.setAttribute('href', withBase(a.getAttribute('href')))
+  })
+
   // Load CSS
   if (!document.querySelector('link[href*="asciinema-player"]')) {
     const link = document.createElement('link')
@@ -187,13 +197,13 @@ onMounted(() => {
   script.src = 'https://unpkg.com/asciinema-player@3.15.1/dist/bundle/asciinema-player.min.js'
   script.onload = () => {
     const radio = document.getElementById('showcase-ide')
-    const base = document.querySelector('base')?.getAttribute('href') || '/'
+    const castUrl = withBase('/assets/demo.cast')
 
     function initPlayer() {
       const el = document.getElementById('ide-player')
       if (!el || el.hasChildNodes()) return
       window.AsciinemaPlayer.create(
-        base + 'assets/demo.cast',
+        castUrl,
         el,
         { autoPlay: true, loop: true, speed: 2, theme: 'monokai', fit: 'width' }
       )
