@@ -69,6 +69,10 @@ sidebar: false
 
 <h1 class="case-study-title">PhaseSkate IDE</h1>
 <p class="case-study-subtitle">A 1,000-group hierarchical normal model (the classic "Eight Schools" structure scaled up with random data) sampled live in the PhaseSkate TUI.</p>
+<ul class="ide-notes">
+  <li>The TUI can be loaded with a prewritten model, or launched from an active REPL session.</li>
+  <li>Enzyme compiles the gradient on the first call (brief delay), but subsequent calls are instantaneous as shown below.</li>
+</ul>
 
 <div class="ide-demo-card">
   <div id="ide-player"></div>

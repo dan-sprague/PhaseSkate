@@ -300,6 +300,18 @@
 #showcase-casestudy:checked ~ .showcase-panels > .showcase-panel-casestudy { display: block; }
 #showcase-ide:checked ~ .showcase-panels > .showcase-panel-ide { display: block; }
 
+/* ── IDE notes (bullet points above player) ──────────────── */
+.ide-notes {
+  padding-left: 1.25rem;
+  margin: 0 0 1.5rem;
+  font-size: 0.92rem;
+  color: var(--vp-c-text-2);
+  line-height: 1.7;
+}
+.ide-notes li {
+  margin-bottom: 0.3rem;
+}
+
 /* ── Asciinema player ─────────────────────────────────────── */
 .ide-demo-card {
   border-radius: 12px;
