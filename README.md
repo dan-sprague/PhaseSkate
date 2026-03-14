@@ -12,10 +12,6 @@ PhaseSkate started off more as a pretty simple question, really. Given a perform
 
 Things spiraled when I decided Enzyme had to be able to do static analysis of the gradient on an arbtitrary *lpdf* at compile time, ie no `set_runtime_analysis`. This meant that my logpdf could not be passed through any generic interfaces, which essentially led to the package you see now. In practice, this means that PhaseSkate has its own implementation of Stan's NUTS algorithm, as well as its own implementation of `lpdf` functions, which in the examples you will see are called in the style of Stan. 
 
-What I have found, and what I hope you find, is that this was worth the price. PhaseSkate demonstrates very high ESS/sec sampling on complex models when using a dense mass matrix, surely attributable to Enzyme's amazing LLVM gradient compilation. :)
-
-Additionally, I have often wished I could track sampling progress for complex models in real time. `PhaseSkate` includes callback functions using a `Channel` during sampling. This then enabled a really neat TUI to be build using the recently published `Tachikoma.jl` package that shows live chain statistics and diagnostics, as well as live traces and histograms of the chains once warmup is exited.
-
 **Features**
 
 1. Built for Enzyme and Enzyme only, meaning static analysis on lpdfs at Enzyme compile time. lpdfs are implemented as pure, numerical functions with no external dependencies.
