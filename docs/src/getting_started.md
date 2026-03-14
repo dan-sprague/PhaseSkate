@@ -48,6 +48,9 @@ This generates:
 - A data struct `MyModelData` with the fields from `@constants`
 - A `make(data::MyModelData)` function that returns a compiled `ModelLogDensity`
 
+!!! note
+    All log-PDF functions are implemented as pure arithmetic (no foreign library calls) to remain fully differentiable by Enzyme.
+
 ### 2. Build and sample
 
 ```julia
