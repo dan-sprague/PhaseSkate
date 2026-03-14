@@ -637,6 +637,64 @@ end
     @test ess_val > 0
 end
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Type Stability Check
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@testset "Type Stability Check" begin
+    @testset "rejects Any-typed containers" begin
+        @skate AnyModel begin
+            @constants begin
+                N::Int
+                y::Vector{Float64}
+            end
+            @params begin
+                mu::Float64
+            end
+            @logjoint begin
+                x = Any[1.0, 2.0]
+                target += x[1]
+                target += mu
+            end
+        end
+
+        d = AnyModelData(N=1, y=[1.0])
+        @test_throws ErrorException make(d)
+
+        try
+            make(d)
+        catch e
+            @test contains(e.msg, "Type instability")
+            @test contains(e.msg, "AnyModel")
+        end
+    end
+
+    @testset "accepts valid models" begin
+        @skate ValidModel begin
+            @constants begin
+                N::Int
+                y::Vector{Float64}
+            end
+            @params begin
+                mu::Float64
+                sigma = param(Float64; lower=0.0)
+            end
+            @logjoint begin
+                target += normal_lpdf(mu, 0.0, 10.0)
+                target += exponential_lpdf(sigma, 1.0)
+                for i in 1:N
+                    target += normal_lpdf(y[i], mu, sigma)
+                end
+            end
+        end
+
+        d = ValidModelData(N=10, y=randn(10))
+        m = make(d)
+        @test m isa ModelLogDensity
+        @test m.dim == 2
+    end
+end
+
 end # @testset "PhaseSkate"
 
 # ── PosteriorDB validation tests (opt-in) ────────────────────────────────────

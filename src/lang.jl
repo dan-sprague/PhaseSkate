@@ -1142,6 +1142,62 @@ function _warn_bare_lpdf(ex, model_name)
     end
 end
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Type stability checking via JET.jl
+# ═══════════════════════════════════════════════════════════════════════════════
+
+function _check_type_stability(ℓ, dim::Int, model_name::Symbol)
+    # 1. Check return type
+    ret_types = Base.return_types(ℓ, (Vector{Float64},))
+    ret_ok = !isempty(ret_types) && all(T -> T === Float64, ret_types)
+
+    # 2. Run JET optimization analysis (catches runtime dispatch)
+    opt_result = report_opt(ℓ, (Vector{Float64},))
+    opt_reports = get_reports(opt_result)
+
+    # 3. Run JET error analysis (catches type errors from bad unions)
+    call_result = report_call(ℓ, (Vector{Float64},))
+    call_reports = get_reports(call_result)
+
+    has_issues = !ret_ok || !isempty(opt_reports) || !isempty(call_reports)
+    has_issues || return  # all clean
+
+    buf = IOBuffer()
+    println(buf)
+    printstyled(buf, "[@skate $model_name] Type instability detected in @logjoint body.\n"; color=:red, bold=true)
+    println(buf)
+
+    if !ret_ok
+        inferred = isempty(ret_types) ? "unknown" : string(ret_types[1])
+        println(buf, "  Return type: expected Float64, got $inferred")
+        println(buf)
+    end
+
+    if !isempty(call_reports)
+        println(buf, "  Type errors ($(length(call_reports))):")
+        for (i, r) in enumerate(call_reports)
+            println(buf, "    $i. ", sprint(show, r))
+        end
+        println(buf)
+    end
+
+    if !isempty(opt_reports)
+        println(buf, "  Runtime dispatch ($(length(opt_reports))):")
+        for (i, r) in enumerate(opt_reports)
+            println(buf, "    $i. ", sprint(show, r))
+        end
+        println(buf)
+    end
+
+    println(buf, "  All functions called inside @logjoint must accept and return concrete")
+    println(buf, "  Float64 values. Avoid generic functions, dynamic dispatch, and Any-typed")
+    println(buf, "  containers. PhaseSkate requires type stability for Enzyme AD.")
+    println(buf)
+    println(buf, "  Tip: use @report_opt(make(data).ℓ, (Vector{Float64},)) for detailed analysis.")
+
+    error(String(take!(buf)))
+end
+
 """
     @skate ModelName begin
         @constants begin ... end
@@ -1522,6 +1578,8 @@ macro skate(model_name::Symbol, body::Expr)
                 $(model_stmts...)
                 return target + log_jac
             end
+
+            PhaseSkate._check_type_stability(ℓ, dim, $(QuoteNode(model_name)))
 
             constrain = function(q::AbstractVector{Float64})
                 $(constrain_stmts...)

@@ -13,6 +13,7 @@ Built for Enzyme LLVM autodifferentiation.
 module PhaseSkate
 
 using Enzyme
+using JET: report_opt, report_call, get_reports
 using Random: randn, randn!, Xoshiro
 using LinearAlgebra: dot, mul!, cholesky, Symmetric, I, LowerTriangular, BLAS, diagm
 using Statistics
