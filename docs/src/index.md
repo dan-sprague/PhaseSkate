@@ -205,7 +205,7 @@ onMounted(() => {
       window.AsciinemaPlayer.create(
         castUrl,
         el,
-        { autoPlay: true, loop: true, speed: 2, theme: 'monokai', fit: 'width', startAt: 34, endAt: 61 }
+        { autoPlay: true, loop: true, speed: 2, theme: 'monokai', fit: 'width' }
       )
     }
 
