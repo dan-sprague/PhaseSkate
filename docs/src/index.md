@@ -184,7 +184,7 @@ onMounted(() => {
     a.setAttribute('href', withBase(a.getAttribute('href')))
   })
 
-  // Load CSS
+  // Load asciinema-player CSS
   if (!document.querySelector('link[href*="asciinema-player"]')) {
     const link = document.createElement('link')
     link.rel = 'stylesheet'
@@ -192,7 +192,7 @@ onMounted(() => {
     document.head.appendChild(link)
   }
 
-  // Load JS, then create player when IDE tab is first shown
+  // Load asciinema-player JS, then create player
   const script = document.createElement('script')
   script.src = 'https://unpkg.com/asciinema-player@3.15.1/dist/bundle/asciinema-player.min.js'
   script.onload = () => {
@@ -202,21 +202,18 @@ onMounted(() => {
     function initPlayer() {
       const el = document.getElementById('ide-player')
       if (!el || el.hasChildNodes()) return
-      window.AsciinemaPlayer.create(
-        castUrl,
-        el,
-        { autoPlay: true, loop: true, speed: 2, theme: 'monokai', fit: 'width' }
-      )
+      window.AsciinemaPlayer.create(castUrl, el, {
+        autoPlay: true,
+        loop: true,
+        speed: 2,
+        fit: 'width',
+      })
     }
 
-    // If IDE tab is already active, init now; otherwise wait for click
-    if (radio && radio.checked) {
-      initPlayer()
-    }
-    radio.addEventListener('change', () => { setTimeout(initPlayer, 50) })
-    // Also catch label clicks
+    if (radio && radio.checked) initPlayer()
+    radio.addEventListener('change', () => setTimeout(initPlayer, 50))
     document.querySelector('label[for="showcase-ide"]')
-      ?.addEventListener('click', () => { setTimeout(initPlayer, 100) })
+      ?.addEventListener('click', () => setTimeout(initPlayer, 100))
   }
   document.head.appendChild(script)
 })
